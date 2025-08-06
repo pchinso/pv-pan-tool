@@ -58,3 +58,5 @@ data/database/*.sqlite
 *.log
 data/pan_files/*.PAN
 data/pan_files/*.pan
+tempCodeRunnerFile.py
+*.csv
