@@ -3,6 +3,7 @@ Example usage of the PV Module Database.
 This script demonstrates how to use the database for real-world scenarios.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -11,6 +12,40 @@ sys.path.insert(0, 'src')
 
 from pv_pan_tool.database import PVModuleDatabase
 from pv_pan_tool.parser import PANFileParser
+
+DEBUG = True  # Set to True for debugging mode
+BASE_DIR = r"C:\Users\slpcs.ABG\OneDrive - Cox\PAN_catalog\01. Modulos"
+
+def example_0_remove_database_and_parsed_registry():
+    """Example 0: Remove existing database and parsed registry."""
+    print("=" * 60)
+    print("           EXAMPLE 0: REMOVE DATABASE & PARSED REGISTRY")
+    print("=" * 60)
+    print()
+
+    db = PVModuleDatabase()
+
+    # Remove existing database
+    db.clear_database()
+    print("✅ Existing database clared")
+
+    # Remove parsed registry
+    parser = PANFileParser(BASE_DIR)
+    if not parser.registry_file.exists():
+        print("⚠️ No parsed registry found, skipping removal")
+    else:
+        print(f"🔄 Removing parsed registry at {parser.registry_file}")
+        # Remove the parsed registry file parsed_files_registry.json
+        try:
+            os.remove(parser.registry_file)
+            print("✅ Parsed registry removed")
+        except Exception as e:
+            print(f"❌ Failed to remove parsed registry: {e}")
+            print("   Forcing remove of parsed_files_registry.json")
+            os.remove(r"C:\_Dev\Python\Projects\pv-pan-tool\parsed_files_registry.json")
+            print("✅ Forced remove of parsed_files_registry.json")
+
+    print("🔄 Database and registry reset complete")
 
 
 def example_1_populate_database():
@@ -25,13 +60,12 @@ def example_1_populate_database():
     print("✅ Database initialized")
 
     # Initialize parser
-    base_directory = r"C:\Users\slpcs.ABG\OneDrive - Cox\PAN_catalog\01. Modulos"
-    parser = PANFileParser(base_directory)
+    parser = PANFileParser(BASE_DIR)
     print("✅ Parser initialized")
 
-    # Parse first 10 files and add to database
-    print("🔍 Parsing first 10 files...")
-    results = parser.parse_directory(max_files=20)
+    # Parse files and add to database
+    print("🔍 Parsing files...")
+    results = parser.parse_directory(max_files=2000)
 
     # Insert into database
     print("💾 Inserting into database...")
@@ -58,7 +92,8 @@ def example_2_search_and_filter():
     longi_modules = db.search_modules(manufacturer="Longi", limit=5)
     print(f"Found {len(longi_modules)} Longi modules:")
     for module in longi_modules:
-        print(f"   📦 {module['model']} - {module['pmax_stc']}W - {module['efficiency_stc']:.1f}%")
+        efficiency = f"{module['efficiency_stc']:.1f}%" if module['efficiency_stc'] is not None else "N/A"
+        print(f"   📦 {module['model']} - {module['pmax_stc']}W - {efficiency}")
     print()
 
     # Search 2: High-power modules (>500W)
@@ -74,7 +109,8 @@ def example_2_search_and_filter():
     high_efficiency = db.search_modules(min_efficiency=22, limit=5)
     print(f"Found {len(high_efficiency)} high-efficiency modules:")
     for module in high_efficiency:
-        print(f"   📈 {module['manufacturer']} {module['model']} - {module['efficiency_stc']:.2f}%")
+        efficiency = f"{module['efficiency_stc']:.2f}%" if module['efficiency_stc'] is not None else "N/A"
+        print(f"   📈 {module['manufacturer']} {module['model']} - {efficiency}")
     print()
 
     # Search 4: Specific power range
@@ -173,7 +209,7 @@ def example_4_module_comparison():
 
         # Efficiency and dimensions
         efficiencies = [f"{m['efficiency_stc']:.2f}%" if m['efficiency_stc'] else "N/A" for m in high_power_modules]
-        dimensions = [f"{m['length']:.0f}x{m['width']:.0f}mm" if m['length'] and m['width'] else "N/A" for m in high_power_modules]
+        dimensions = [f"{m['height']:.0f}x{m['width']:.0f}mm" if m['height'] and m['width'] else "N/A" for m in high_power_modules]
 
         print(f"{'Efficiency':<25} {efficiencies[0]:<20} {efficiencies[1] if len(efficiencies) > 1 else 'N/A':<20} {efficiencies[2] if len(efficiencies) > 2 else 'N/A':<20}")
         print(f"{'Dimensions':<25} {dimensions[0]:<20} {dimensions[1] if len(dimensions) > 1 else 'N/A':<20} {dimensions[2] if len(dimensions) > 2 else 'N/A':<20}")
@@ -223,6 +259,10 @@ def main():
     print("🚀 PV MODULE DATABASE - USAGE EXAMPLES")
     print("=" * 60)
     print()
+
+    if DEBUG:
+        print("🔧 Running in DEBUG mode - removing existing database and parsed registry")
+        example_0_remove_database_and_parsed_registry()
 
     try:
         # Check if database exists and has data

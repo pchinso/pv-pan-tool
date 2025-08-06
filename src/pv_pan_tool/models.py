@@ -168,6 +168,7 @@ class FileMetadata(BaseModel):
     file_hash: str = Field(..., description="SHA-256 hash of the file content")
     last_modified: datetime = Field(..., description="Last modification timestamp")
     parsed_at: datetime = Field(default_factory=datetime.now, description="When the file was parsed")
+    parser_version: str = Field("1.0.0", description="Version of the parser used")
 
     manufacturer_folder: Optional[str] = Field(None, description="Manufacturer folder name")
     model_folder: Optional[str] = Field(None, description="Model folder name")

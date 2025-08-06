@@ -10,7 +10,7 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .models import (
     CellType,
@@ -27,62 +27,126 @@ from .models import (
 
 
 class PANFileParser:
-    """Parser for .PAN files containing PV module specifications."""
+    """
+    Parser .PAN files containing photovoltaic module specifications.
+
+    This class provides functionality to:
+    - Scan directories for .PAN files
+    - Track processed files using a registry system
+    - Parse .PAN files into structured PVModule objects
+    - Handle file encodings and hierarchical .PAN structures
+    - Convert units and map fields to standardized models
+
+    The parser follows PV*SOL's standardized .PAN format, which uses:
+    - Hierarchical objects (PVObject_ blocks)
+    - Key-value pairs for specifications
+    - Structured objects for IAM profiles and commercial data
+
+    Features:
+    - Automatic detection of new/changed files
+    - Unit conversion (meters to mm, mV/°C to %/°C)
+    - Technology string to CellType enum mapping
+    - IAM profile extraction
+    - Temperature coefficient conversion
+
+    Registry System:
+    - Tracks processed files to avoid reprocessing
+    - Uses SHA-256 hashes to detect changes
+    - Stores parsing status and errors
+
+    Example Usage:
+    ```python
+    from pv_pan_tool.parser import PANFileParser
+
+    # Initialize parser with data directory
+    parser = PANFileParser(base_directory="path/to/pan_files")
+
+    # Parse all new/changed files
+    results = parser.parse_directory()
+
+    # Access parsing results
+    for file_path, result in results.items():
+        if result.success:
+            module = result.module
+            print(f"Parsed: {module.manufacturer_info.name} {module.manufacturer_info.model}")
+            print(f"Power: {module.electrical_params.pmax_stc}W")
+            print(f"Dimensions: {module.physical_params.width}x{module.physical_params.height}mm")
+        else:
+            print(f"Failed to parse {file_path}: {result.error_message}")
+
+    # Get statistics
+    stats = parser.get_statistics(results)
+    print(f"Success rate: {stats['success_rate']:.1f}%")
+    ```
+
+    File Structure Example:
+    ```
+    project_root/
+    ├── Manufacturer_A/
+    │   ├── Model_X/
+    │   │   ├── spec.pan
+    │   │   └── variant.pan
+    │   └── Model_Y/
+    │       └── data.pan
+    └── Manufacturer_B/
+        └── Model_Z.pan
+    """
+    FIELD_MAPPING = {
+        # Commercial info
+        'Manufacturer': ('manufacturer_info', 'name'),
+        'Model': ('manufacturer_info', 'model'),
+        'DataSource': ('manufacturer_info', 'data_source'),
+        'YearBeg': ('manufacturer_info', 'year'),
+        'Width': ('physical_params', 'width'),
+        'Height': ('physical_params', 'height'),
+        'Depth': ('physical_params', 'thickness'),
+        'Weight': ('physical_params', 'weight'),
+
+        # Electrical parameters
+        'NCelS': ('physical_params', 'cells_in_series'),
+        'NCelP': ('physical_params', 'cells_in_parallel'),
+        'NDiode': ('electrical_params', 'bypass_diodes'),
+        'GRef': ('electrical_params', 'g_ref'),
+        'TRef': ('electrical_params', 't_ref'),
+        'PNom': ('electrical_params', 'pmax_stc'),
+        'Isc': ('electrical_params', 'isc_stc'),
+        'Voc': ('electrical_params', 'voc_stc'),
+        'Imp': ('electrical_params', 'imp_stc'),
+        'Vmp': ('electrical_params', 'vmp_stc'),
+        'muISC': ('electrical_params', 'temp_coeff_isc'),
+        'muVocSpec': ('electrical_params', 'temp_coeff_voc'),
+        'muPmpReq': ('electrical_params', 'temp_coeff_pmax'),
+        'BifacialityFactor': ('electrical_params', 'bifaciality_factor'),
+        'RShunt': ('electrical_params', 'r_shunt'),
+        'RSerie': ('electrical_params', 'r_series'),
+        'VMaxIEC': ('electrical_params', 'max_system_voltage'),
+    }
+
+    # Unit conversions for consistent storage
+    UNIT_CONVERSIONS = {
+        'width': 1000,        # m to mm
+        'height': 1000,       # m to mm
+        'thickness': 1000,    # m to mm
+        'temp_coeff_voc': 0.1,  # mV/°C to %/°C
+    }
 
     def __init__(self, base_directory: str, registry_file: str = "parsed_files_registry.json"):
-        """
-        Initialize the PAN file parser.
-
-        Args:
-            base_directory: Base directory to scan for .PAN files
-            registry_file: File to store parsing registry
-        """
         self.base_directory = Path(base_directory)
         self.registry_file = Path(registry_file)
         self.registry: Dict[str, ParsedFileRegistry] = {}
         self.load_registry()
 
-        # Parameter mapping for different .PAN file formats
-        self.parameter_mappings = {
-            # Electrical parameters
-            "pmax_stc": ["Pmax", "P_max", "Pmax_stc", "Power", "Nominal_Power"],
-            "vmp_stc": ["Vmp", "V_mp", "Vmpp", "V_mpp", "Voltage_at_Pmax"],
-            "imp_stc": ["Imp", "I_mp", "Impp", "I_mpp", "Current_at_Pmax"],
-            "voc_stc": ["Voc", "V_oc", "Open_Circuit_Voltage"],
-            "isc_stc": ["Isc", "I_sc", "Short_Circuit_Current"],
-            "temp_coeff_pmax": ["TempCoeff_Pmax", "Temp_Coeff_P", "Alpha_P"],
-            "temp_coeff_voc": ["TempCoeff_Voc", "Temp_Coeff_V", "Beta_Voc"],
-            "temp_coeff_isc": ["TempCoeff_Isc", "Temp_Coeff_I", "Alpha_Isc"],
-            "noct": ["NOCT", "Nominal_Operating_Cell_Temperature"],
-            "series_fuse": ["Series_Fuse", "Fuse_Rating"],
-            "max_system_voltage": ["Max_System_Voltage", "Maximum_System_Voltage"],
-
-            # Physical parameters
-            "length": ["Length", "Module_Length", "L"],
-            "width": ["Width", "Module_Width", "W"],
-            "thickness": ["Thickness", "Module_Thickness", "T"],
-            "weight": ["Weight", "Module_Weight"],
-            "cells_series": ["Cells_in_Series", "Series_Cells", "Ns"],
-            "cells_parallel": ["Cells_in_Parallel", "Parallel_Cells", "Np"],
-
-            # Manufacturer info
-            "manufacturer": ["Manufacturer", "Company", "Brand"],
-            "model": ["Model", "Part_Number", "Product_Name"],
-            "series": ["Series", "Product_Series"],
-        }
-
     def load_registry(self) -> None:
-        """Load the parsing registry from file."""
+        """Load the parsed files registry from disk, if it exists."""
         if self.registry_file.exists():
             try:
-                with open(self.registry_file, 'r', encoding='utf-8') as f:
+                with open(self.registry_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self.registry = {
-                        path: ParsedFileRegistry(**entry)
-                        for path, entry in data.items()
+                        k: ParsedFileRegistry(**v) for k, v in data.items()
                     }
             except Exception as e:
-                print(f"Warning: Could not load registry: {e}")
+                print(f"Failed to load registry: {e}")
                 self.registry = {}
         else:
             self.registry = {}
@@ -91,8 +155,7 @@ class PANFileParser:
         """Save the parsing registry to file."""
         try:
             data = {
-                str(path): entry.dict()
-                for path, entry in self.registry.items()
+                str(k): v.dict() for k, v in self.registry.items()
             }
             with open(self.registry_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, default=str)
@@ -113,12 +176,10 @@ class PANFileParser:
     def scan_directory(self) -> List[Path]:
         """
         Scan the base directory for .PAN files.
-
         Returns:
             List of paths to .PAN files found
         """
         pan_files = []
-
         if not self.base_directory.exists():
             print(f"Warning: Base directory does not exist: {self.base_directory}")
             return pan_files
@@ -126,18 +187,12 @@ class PANFileParser:
         # Search for .PAN files recursively
         for pattern in ["**/*.pan", "**/*.PAN"]:
             pan_files.extend(self.base_directory.glob(pattern))
-
         return sorted(set(pan_files))
 
     def extract_manufacturer_model_from_path(self, file_path: Path) -> Tuple[str, str]:
         """
         Extract manufacturer and model from file path structure.
-
         Expected structure: .../Manufacturer/Model/file.pan
-
-        Args:
-            file_path: Path to the .PAN file
-
         Returns:
             Tuple of (manufacturer, model)
         """
@@ -160,7 +215,6 @@ class PANFileParser:
                 model = file_path.stem
 
             return manufacturer, model
-
         except ValueError:
             # File is not under base directory
             return "Unknown", file_path.stem
@@ -168,18 +222,12 @@ class PANFileParser:
     def get_new_files(self, all_files: List[Path]) -> List[Path]:
         """
         Get list of files that need to be processed (new or modified).
-
-        Args:
-            all_files: List of all .PAN files found
-
         Returns:
             List of files that need processing
         """
         new_files = []
-
         for file_path in all_files:
             file_str = str(file_path)
-
             try:
                 # Get file stats
                 stat = file_path.stat()
@@ -195,27 +243,15 @@ class PANFileParser:
                         registry_entry.success):
                         # File unchanged and previously processed successfully
                         continue
-
                 new_files.append(file_path)
-
             except Exception as e:
                 print(f"Warning: Could not check file {file_path}: {e}")
                 new_files.append(file_path)  # Process it anyway
-
         return new_files
 
     def read_pan_file(self, file_path: Path) -> Optional[str]:
-        """
-        Read .PAN file content with multiple encoding attempts.
-
-        Args:
-            file_path: Path to the .PAN file
-
-        Returns:
-            File content as string, or None if reading failed
-        """
+        """Read .PAN file content with multiple encoding attempts."""
         encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
-
         for encoding in encodings:
             try:
                 with open(file_path, 'r', encoding=encoding) as f:
@@ -225,100 +261,182 @@ class PANFileParser:
             except Exception as e:
                 print(f"Error reading file {file_path}: {e}")
                 break
-
         return None
 
-    def parse_numeric_value(self, value_str: str) -> Optional[float]:
-        """
-        Parse numeric value from string, handling units and formatting.
+    def parse_pan_structure(self, content: str) -> Dict[str, Any]:
+        """Parse .pan file content into a structured dictionary."""
+        result = {}
+        stack = []
+        current = result
+        lines = content.splitlines()
 
-        Args:
-            value_str: String containing numeric value
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
 
-        Returns:
-            Parsed float value or None if parsing failed
-        """
-        if not value_str or value_str.strip() == "":
+            # Handle object blocks
+            if stripped.startswith("PVObject_"):
+                parts = stripped.split('=', 1)
+                if len(parts) < 2:
+                    continue
+
+                obj_name = parts[0][9:]  # Remove "PVObject_" prefix
+                obj_type = parts[1]
+
+                new_obj = {"__type__": obj_type}
+                current[obj_name] = new_obj
+                stack.append(current)
+                current = new_obj
+
+            elif stripped.startswith("End of PVObject"):
+                if stack:
+                    current = stack.pop()
+
+            # Handle key-value pairs
+            elif '=' in stripped:
+                key, value = [part.strip() for part in stripped.split('=', 1)]
+
+                # Handle comma-separated values (like IAM points)
+                if ',' in value:
+                    current[key] = [v.strip() for v in value.split(',')]
+                else:
+                    current[key] = value
+
+        return result
+
+    def parse_numeric_value(self, value: Union[str, List[str]]) -> Optional[float]:
+        """Parse numeric value from string or list."""
+        try:
+            if isinstance(value, list) and value:
+                return float(value[0].replace(',', '.'))
+            elif isinstance(value, str):
+                return float(value.replace(',', '.'))
+        except (ValueError, TypeError):
             return None
-
-        # Clean the string
-        cleaned = value_str.strip().replace(',', '.')
-
-        # Remove common units and extra text
-        units_to_remove = ['W', 'V', 'A', 'mm', 'kg', 'C', '%', '°C', 'Wp', 'x']
-        for unit in units_to_remove:
-            cleaned = cleaned.replace(unit, ' ')
-
-        # Extract all numeric values using regex
-        matches = re.findall(r'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?', cleaned)
-
-        if matches:
-            try:
-                # For strings like "pvCommercial x 1.134 mm", we want the last numeric value
-                # which is typically the actual measurement
-                numeric_values = [float(match) for match in matches]
-
-                # Filter out values that are clearly not measurements (like years, small decimals that might be coefficients)
-                reasonable_values = [v for v in numeric_values if v > 0.1]
-
-                if reasonable_values:
-                    # Return the last reasonable value (typically the actual measurement)
-                    return reasonable_values[-1]
-                elif numeric_values:
-                    # If no reasonable values, return the last numeric value
-                    return numeric_values[-1]
-
-            except ValueError:
-                pass
-
         return None
 
-    def extract_parameter_value(self, content: str, parameter_names: List[str]) -> Optional[Union[str, float]]:
-        """
-        Extract parameter value from .PAN file content.
+    def map_pan_data(self, pan_data: Dict, manufacturer: str, model: str, file_metadata: FileMetadata) -> PVModule:
+        """Map parsed .pan data to PVModule object."""
+        # Initialize objects
+        manufacturer_info = ManufacturerInfo(name=manufacturer, model=model)
+        physical_params = PhysicalParameters()
+        electrical_params = ElectricalParameters()
+        certification_info = CertificationInfo()
 
-        Args:
-            content: .PAN file content
-            parameter_names: List of possible parameter names to search for
+        # Extract root object if exists
+        if "" in pan_data:
+            pan_data = pan_data[""]  # Extract root pvModule object
 
-        Returns:
-            Extracted value or None if not found
-        """
-        for param_name in parameter_names:
-            # Try different patterns
-            patterns = [
-                rf'{param_name}\s*=\s*([^\n\r]+)',
-                rf'{param_name}\s*:\s*([^\n\r]+)',
-                rf'{param_name}\s+([^\n\r]+)',
-            ]
+        # Extract commercial info and root level parameters
+        commercial = pan_data.get("Commercial", {})
 
-            for pattern in patterns:
-                match = re.search(pattern, content, re.IGNORECASE)
-                if match:
-                    value_str = match.group(1).strip()
+        # Process both commercial section and root level fields
+        data_sources = [commercial, pan_data]
+        for data_source in data_sources:
+            for pan_field, (obj_name, attr_name) in self.FIELD_MAPPING.items():
+                if pan_field in data_source:
+                    value = data_source[pan_field]
+                    # Determine target object
+                    target = None
+                    if obj_name == 'manufacturer_info':
+                        target = manufacturer_info
+                    elif obj_name == 'physical_params':
+                        target = physical_params
+                    elif obj_name == 'electrical_params':
+                        target = electrical_params
 
-                    # Try to parse as numeric first
-                    numeric_value = self.parse_numeric_value(value_str)
-                    if numeric_value is not None:
-                        return numeric_value
+                    if target:
+                        num_value = self.parse_numeric_value(value)
+                        if num_value is not None:
+                            # Apply unit conversions
+                            if attr_name in self.UNIT_CONVERSIONS:
+                                num_value *= self.UNIT_CONVERSIONS[attr_name]
+                            setattr(target, attr_name, num_value)
+                        else:
+                            setattr(target, attr_name, value)
 
-                    # Return as string if not numeric
-                    return value_str
+        # Extract IAM profile
+        iam = pan_data.get("IAM", {})
+        for i in range(1, 10):
+            point_key = f"Point_{i}"
+            if point_key in iam:
+                try:
+                    # Extract IAM value (second value in comma-separated pair)
+                    point_value = iam[point_key]
+                    if isinstance(point_value, list):
+                        # Handle list format: [angle, iam_value]
+                        iam_value = float(point_value[1].strip())
+                    elif isinstance(point_value, str):
+                        # Handle string format: "angle, iam_value"
+                        iam_value = float(point_value.split(',')[1].strip())
+                    else:
+                        continue
+                    setattr(electrical_params, f"iam_{5*(i-1)}", iam_value)
+                except (IndexError, ValueError, TypeError):
+                    continue
 
-        return None
+        # Handle cell technology mapping
+        tech_map = {
+            "mtSiMono": CellType.MONOCRYSTALLINE,
+            "mtSiPoly": CellType.POLYCRYSTALLINE,
+            "mtCIS": CellType.CIGS,
+            "mtCdTe": CellType.CDTE,
+        }
+        tech_str = pan_data.get("Technol", "")
+        cell_type = tech_map.get(tech_str, CellType.UNKNOWN)
+
+        # Handle temperature coefficient units conversion
+        if electrical_params.temp_coeff_voc and electrical_params.voc_stc:
+            # Convert mV/°C to %/°C
+            electrical_params.temp_coeff_voc = (
+                electrical_params.temp_coeff_voc * 0.1 /
+                electrical_params.voc_stc
+            )
+
+        # Create PV module
+        return PVModule(
+            manufacturer_info=manufacturer_info,
+            electrical_params=electrical_params,
+            physical_params=physical_params,
+            certification_info=certification_info,
+            file_metadata=file_metadata,
+            cell_type=cell_type,
+            technology=tech_str,
+            raw_data=pan_data  # Store raw parsed structure
+        )
+
+    def create_file_metadata(self, file_path: Path, manufacturer: str, model: str) -> FileMetadata:
+        """Create file metadata object."""
+        stat = file_path.stat()
+        return FileMetadata(
+            file_path=file_path,
+            file_name=file_path.name,
+            file_size=stat.st_size,
+            file_hash=self.calculate_file_hash(file_path),
+            last_modified=datetime.fromtimestamp(stat.st_mtime),
+            parsed_at=datetime.now(),
+            manufacturer_folder=manufacturer,
+            model_folder=model
+        )
+
+    def update_registry(self, file_path: Path, success: bool, error: str = "") -> None:
+        """Update parsing registry."""
+        stat = file_path.stat()
+        self.registry[str(file_path)] = ParsedFileRegistry(
+            file_path=file_path,
+            file_hash=self.calculate_file_hash(file_path),
+            file_size=stat.st_size,
+            last_modified=datetime.fromtimestamp(stat.st_mtime),
+            parsed_at=datetime.now(),
+            parser_version="1.0.0",
+            success=success,
+            error_message=error
+        )
 
     def parse_file(self, file_path: Path) -> ParsingResult:
-        """
-        Parse a single .PAN file.
-
-        Args:
-            file_path: Path to the .PAN file
-
-        Returns:
-            ParsingResult with parsed data or error information
-        """
         try:
-            # Read file content
+            # 1. Read file content
             content = self.read_pan_file(file_path)
             if content is None:
                 return ParsingResult(
@@ -326,120 +444,36 @@ class PANFileParser:
                     error_message="Could not read file with any encoding"
                 )
 
-            # Extract manufacturer and model from path
+            # 2. Parse file structure
+            pan_data = self.parse_pan_structure(content)
+            if not pan_data:
+                return ParsingResult(
+                    success=False,
+                    error_message="Failed to parse file structure"
+                )
+
+            # 3. Extract manufacturer/model from path
             manufacturer, model = self.extract_manufacturer_model_from_path(file_path)
 
-            # Get file metadata
-            stat = file_path.stat()
-            file_hash = self.calculate_file_hash(file_path)
+            # 4. Create file metadata
+            file_metadata = self.create_file_metadata(file_path, manufacturer, model)
 
-            # Extract parameters
-            parameters_extracted = 0
-            warnings = []
+            # 5. Map to PVModule object
+            pv_module = self.map_pan_data(pan_data, manufacturer, model, file_metadata)
 
-            # Electrical parameters
-            electrical_params = ElectricalParameters()
-            for param, names in self.parameter_mappings.items():
-                if param.startswith(('pmax', 'vmp', 'imp', 'voc', 'isc', 'temp_coeff', 'noct', 'series_fuse', 'max_system')):
-                    value = self.extract_parameter_value(content, names)
-                    if value is not None:
-                        setattr(electrical_params, param, value)
-                        parameters_extracted += 1
+            # 6. Update registry
+            self.update_registry(file_path, True)
 
-            # Physical parameters
-            physical_params = PhysicalParameters()
-            for param, names in self.parameter_mappings.items():
-                if param.startswith(('length', 'width', 'thickness', 'weight', 'cells')):
-                    value = self.extract_parameter_value(content, names)
-                    if value is not None:
-                        if param == 'cells_series':
-                            physical_params.cells_in_series = int(value) if isinstance(value, (int, float)) else None
-                        elif param == 'cells_parallel':
-                            physical_params.cells_in_parallel = int(value) if isinstance(value, (int, float)) else None
-                        else:
-                            # Ensure numeric values are properly converted to float
-                            if isinstance(value, str):
-                                numeric_value = self.parse_numeric_value(value)
-                                if numeric_value is not None:
-                                    setattr(physical_params, param, numeric_value)
-                                else:
-                                    warnings.append(f"Could not parse numeric value for {param}: '{value}'")
-                            else:
-                                setattr(physical_params, param, value)
-                        parameters_extracted += 1
-
-            # Calculate total cells if possible
-            if physical_params.cells_in_series and physical_params.cells_in_parallel:
-                physical_params.total_cells = physical_params.cells_in_series * physical_params.cells_in_parallel
-
-            # Manufacturer info
-            manufacturer_info = ManufacturerInfo(
-                name=manufacturer,
-                model=model
-            )
-
-            # Try to extract series from content
-            series_value = self.extract_parameter_value(content, self.parameter_mappings.get('series', []))
-            if series_value:
-                manufacturer_info.series = str(series_value)
-
-            # Certification info
-            certification_info = CertificationInfo()
-
-            # File metadata
-            file_metadata = FileMetadata(
-                file_path=file_path,
-                file_name=file_path.name,
-                file_size=stat.st_size,
-                file_hash=file_hash,
-                manufacturer_folder=manufacturer,
-                model_folder=model
-            )
-
-            # Create PV module
-            pv_module = PVModule(
-                manufacturer_info=manufacturer_info,
-                electrical_params=electrical_params,
-                physical_params=physical_params,
-                certification_info=certification_info,
-                file_metadata=file_metadata,
-                raw_pan_data={"content": content[:1000]}  # Store first 1000 chars for reference
-            )
-
-            # Update registry
-            registry_entry = ParsedFileRegistry(
-                file_path=file_path,
-                file_hash=file_hash,
-                file_size=stat.st_size,
-                last_modified=datetime.fromtimestamp(stat.st_mtime),
-                parsed_at=datetime.now(),
-                parser_version="1.0.0",
-                success=True
-            )
-            self.registry[str(file_path)] = registry_entry
-
+            # 7. Return successful result
             return ParsingResult(
                 success=True,
                 module=pv_module,
-                parameters_extracted=parameters_extracted,
-                parameters_missing=len(self.parameter_mappings) - parameters_extracted,
-                warnings=warnings
+                parameters_extracted=len([v for v in pv_module.dict().values() if v is not None]),
+                warnings=[]  # We could add warning collection later
             )
 
         except Exception as e:
-            # Update registry with error
-            registry_entry = ParsedFileRegistry(
-                file_path=file_path,
-                file_hash=self.calculate_file_hash(file_path),
-                file_size=file_path.stat().st_size if file_path.exists() else 0,
-                last_modified=datetime.fromtimestamp(file_path.stat().st_mtime) if file_path.exists() else datetime.now(),
-                parsed_at=datetime.now(),
-                parser_version="1.0.0",
-                success=False,
-                error_message=str(e)
-            )
-            self.registry[str(file_path)] = registry_entry
-
+            self.update_registry(file_path, False, str(e))
             return ParsingResult(
                 success=False,
                 error_message=str(e)
@@ -448,10 +482,6 @@ class PANFileParser:
     def parse_directory(self, max_files: Optional[int] = None) -> Dict[str, ParsingResult]:
         """
         Parse all .PAN files in the directory.
-
-        Args:
-            max_files: Maximum number of files to process (for testing)
-
         Returns:
             Dictionary mapping file paths to parsing results
         """
@@ -462,7 +492,6 @@ class PANFileParser:
             new_files = new_files[:max_files]
 
         results = {}
-
         print(f"Found {len(all_files)} total .PAN files")
         print(f"Processing {len(new_files)} new/modified files")
 
@@ -476,16 +505,11 @@ class PANFileParser:
 
         # Save final registry
         self.save_registry()
-
         return results
 
     def get_statistics(self, results: Dict[str, ParsingResult]) -> Dict[str, Union[int, float]]:
         """
         Get parsing statistics.
-
-        Args:
-            results: Dictionary of parsing results
-
         Returns:
             Dictionary with statistics
         """

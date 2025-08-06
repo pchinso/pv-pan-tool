@@ -11,74 +11,79 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
-from .models import PVModule, ParsingResult
+from .models import ParsingResult, PVModule
 
 
 class PVModuleDatabase:
     """Database manager for PV module specifications."""
-    
+
     def __init__(self, db_path: str = "data/database/pv_modules.db"):
         """
         Initialize the database manager.
-        
+
         Args:
             db_path: Path to the SQLite database file
         """
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.init_database()
-    
+
+    def _normalize_value(self, value):
+        """Helper method to convert list values to strings for database compatibility."""
+        if isinstance(value, list):
+            return ", ".join(str(v) for v in value) if value else None
+        return value
+
     def init_database(self) -> None:
         """Initialize the database with required tables."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            
+
             # Create main modules table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS pv_modules (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     unique_id TEXT UNIQUE NOT NULL,
-                    
+
                     -- Manufacturer information
                     manufacturer TEXT NOT NULL,
                     model TEXT NOT NULL,
                     series TEXT,
-                    
+
                     -- Electrical parameters (STC)
                     pmax_stc REAL,
                     vmp_stc REAL,
                     imp_stc REAL,
                     voc_stc REAL,
                     isc_stc REAL,
-                    
+
                     -- Temperature coefficients
                     temp_coeff_pmax REAL,
                     temp_coeff_voc REAL,
                     temp_coeff_isc REAL,
-                    
+
                     -- Additional electrical
                     noct REAL,
-                    series_fuse_rating REAL,
                     max_system_voltage REAL,
-                    
+
                     -- Physical parameters
-                    length REAL,
+                    height REAL,
                     width REAL,
                     thickness REAL,
                     weight REAL,
                     cells_in_series INTEGER,
                     cells_in_parallel INTEGER,
                     total_cells INTEGER,
-                    
+
                     -- Technology
                     cell_type TEXT,
                     module_type TEXT,
-                    
+
                     -- Calculated values
                     efficiency_stc REAL,
                     power_density REAL,
                     area_m2 REAL,
-                    
+
                     -- File metadata
                     file_path TEXT NOT NULL,
                     file_name TEXT NOT NULL,
@@ -86,7 +91,7 @@ class PVModuleDatabase:
                     file_hash TEXT,
                     manufacturer_folder TEXT,
                     model_folder TEXT,
-                    
+
                     -- Processing metadata
                     parsed_at TEXT NOT NULL,
                     parser_version TEXT,
@@ -94,7 +99,7 @@ class PVModuleDatabase:
                     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            
+
             # Create certifications table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS certifications (
@@ -105,7 +110,7 @@ class PVModuleDatabase:
                     FOREIGN KEY (module_id) REFERENCES pv_modules (id)
                 )
             """)
-            
+
             # Create raw data table for storing original .PAN content
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS raw_pan_data (
@@ -116,7 +121,7 @@ class PVModuleDatabase:
                     FOREIGN KEY (module_id) REFERENCES pv_modules (id)
                 )
             """)
-            
+
             # Create indexes for better query performance
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_manufacturer ON pv_modules (manufacturer)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_model ON pv_modules (model)")
@@ -125,16 +130,16 @@ class PVModuleDatabase:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_cell_type ON pv_modules (cell_type)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_unique_id ON pv_modules (unique_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_file_hash ON pv_modules (file_hash)")
-            
+
             conn.commit()
-    
+
     def module_exists(self, unique_id: str) -> bool:
         """Check if a module with the given unique_id already exists."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM pv_modules WHERE unique_id = ?", (unique_id,))
             return cursor.fetchone()[0] > 0
-    
+
     def get_module_id_by_unique_id(self, unique_id: str) -> Optional[int]:
         """Get the database ID of a module by its unique_id."""
         with sqlite3.connect(self.db_path) as conn:
@@ -142,15 +147,15 @@ class PVModuleDatabase:
             cursor.execute("SELECT id FROM pv_modules WHERE unique_id = ?", (unique_id,))
             result = cursor.fetchone()
             return result[0] if result else None
-    
+
     def insert_module(self, module: PVModule, update_if_exists: bool = True) -> Optional[int]:
         """
         Insert a PV module into the database.
-        
+
         Args:
             module: PVModule instance to insert
             update_if_exists: If True, update existing module; if False, skip
-            
+
         Returns:
             ID of the inserted/updated module, or None if skipped
         """
@@ -162,40 +167,40 @@ class PVModuleDatabase:
             else:
                 print(f"Module {module.unique_id} already exists, skipping...")
                 return self.get_module_id_by_unique_id(module.unique_id)
-        
+
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            
+
             # Calculate derived values
             efficiency = None
             power_density = None
             area_m2 = None
-            
-            if (module.electrical_params.pmax_stc and 
-                module.physical_params.length and 
+
+            if (module.electrical_params.pmax_stc and
+                module.physical_params.height and
                 module.physical_params.width):
                 try:
-                    length = float(module.physical_params.length)
+                    height = float(module.physical_params.height)
                     width = float(module.physical_params.width)
                     pmax = float(module.electrical_params.pmax_stc)
-                    
-                    area_m2 = (length * width) / 1_000_000  # mm² to m²
+
+                    area_m2 = (height * width) / 1_000_000  # mm² to m²
                     efficiency = (pmax / (area_m2 * 1000)) * 100  # Efficiency %
                     power_density = pmax / area_m2  # W/m²
                 except (ValueError, TypeError, ZeroDivisionError):
                     pass
-            
+
             # Get current timestamp
             current_time = datetime.now().isoformat()
-            
+
             # Insert main module data
             cursor.execute("""
                 INSERT INTO pv_modules (
                     unique_id, manufacturer, model, series,
                     pmax_stc, vmp_stc, imp_stc, voc_stc, isc_stc,
                     temp_coeff_pmax, temp_coeff_voc, temp_coeff_isc,
-                    noct, series_fuse_rating, max_system_voltage,
-                    length, width, thickness, weight,
+                    noct, max_system_voltage,
+                    height, width, thickness, weight,
                     cells_in_series, cells_in_parallel, total_cells,
                     cell_type, module_type,
                     efficiency_stc, power_density, area_m2,
@@ -205,7 +210,7 @@ class PVModuleDatabase:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 module.unique_id,
-                module.manufacturer_info.name,
+                self._normalize_value(module.manufacturer_info.name),
                 module.manufacturer_info.model,
                 module.manufacturer_info.series,
                 module.electrical_params.pmax_stc,
@@ -217,9 +222,8 @@ class PVModuleDatabase:
                 module.electrical_params.temp_coeff_voc,
                 module.electrical_params.temp_coeff_isc,
                 module.electrical_params.noct,
-                module.electrical_params.series_fuse_rating,
                 module.electrical_params.max_system_voltage,
-                module.physical_params.length,
+                module.physical_params.height,
                 module.physical_params.width,
                 module.physical_params.thickness,
                 module.physical_params.weight,
@@ -242,52 +246,52 @@ class PVModuleDatabase:
                 current_time,
                 current_time
             ))
-            
+
             module_id = cursor.lastrowid
-            
+
             # Insert related data
             self._insert_certifications(cursor, module_id, module.certification_info)
-            self._insert_raw_data(cursor, module_id, module.raw_pan_data)
-            
+            self._insert_raw_data(cursor, module_id, module.raw_data)
+
             conn.commit()
             return module_id
-    
+
     def update_module(self, module: PVModule) -> Optional[int]:
         """Update an existing module in the database."""
         module_id = self.get_module_id_by_unique_id(module.unique_id)
         if not module_id:
             return None
-        
+
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            
+
             # Calculate derived values
             efficiency = None
             power_density = None
             area_m2 = None
-            
-            if (module.electrical_params.pmax_stc and 
-                module.physical_params.length and 
+
+            if (module.electrical_params.pmax_stc and
+                module.physical_params.height and
                 module.physical_params.width):
                 try:
-                    length = float(module.physical_params.length)
+                    height = float(module.physical_params.height)
                     width = float(module.physical_params.width)
                     pmax = float(module.electrical_params.pmax_stc)
-                    
-                    area_m2 = (length * width) / 1_000_000  # mm² to m²
+
+                    area_m2 = (height * width) / 1_000_000  # mm² to m²
                     efficiency = (pmax / (area_m2 * 1000)) * 100  # Efficiency %
                     power_density = pmax / area_m2  # W/m²
                 except (ValueError, TypeError, ZeroDivisionError):
                     pass
-            
+
             # Update main module data
             cursor.execute("""
                 UPDATE pv_modules SET
                     manufacturer = ?, model = ?, series = ?,
                     pmax_stc = ?, vmp_stc = ?, imp_stc = ?, voc_stc = ?, isc_stc = ?,
                     temp_coeff_pmax = ?, temp_coeff_voc = ?, temp_coeff_isc = ?,
-                    noct = ?, series_fuse_rating = ?, max_system_voltage = ?,
-                    length = ?, width = ?, thickness = ?, weight = ?,
+                    noct = ?, max_system_voltage = ?,
+                    height = ?, width = ?, thickness = ?, weight = ?,
                     cells_in_series = ?, cells_in_parallel = ?, total_cells = ?,
                     cell_type = ?, module_type = ?,
                     efficiency_stc = ?, power_density = ?, area_m2 = ?,
@@ -296,7 +300,7 @@ class PVModuleDatabase:
                     parsed_at = ?, parser_version = ?, updated_at = ?
                 WHERE id = ?
             """, (
-                module.manufacturer_info.name,
+                self._normalize_value(module.manufacturer_info.name),
                 module.manufacturer_info.model,
                 module.manufacturer_info.series,
                 module.electrical_params.pmax_stc,
@@ -308,9 +312,8 @@ class PVModuleDatabase:
                 module.electrical_params.temp_coeff_voc,
                 module.electrical_params.temp_coeff_isc,
                 module.electrical_params.noct,
-                module.electrical_params.series_fuse_rating,
                 module.electrical_params.max_system_voltage,
-                module.physical_params.length,
+                module.physical_params.height,
                 module.physical_params.width,
                 module.physical_params.thickness,
                 module.physical_params.weight,
@@ -333,17 +336,17 @@ class PVModuleDatabase:
                 datetime.now().isoformat(),
                 module_id
             ))
-            
+
             # Delete and re-insert related data
             cursor.execute("DELETE FROM certifications WHERE module_id = ?", (module_id,))
             cursor.execute("DELETE FROM raw_pan_data WHERE module_id = ?", (module_id,))
-            
+
             self._insert_certifications(cursor, module_id, module.certification_info)
-            self._insert_raw_data(cursor, module_id, module.raw_pan_data)
-            
+            self._insert_raw_data(cursor, module_id, module.raw_data)
+
             conn.commit()
             return module_id
-    
+
     def _insert_certifications(self, cursor, module_id: int, certification_info) -> None:
         """Helper method to insert certifications."""
         cert_data = [
@@ -352,14 +355,14 @@ class PVModuleDatabase:
             ("UL Listed", certification_info.ul_listed),
             ("CE Marking", certification_info.ce_marking),
         ]
-        
+
         for cert_name, certified in cert_data:
             if certified is not None:
                 cursor.execute("""
                     INSERT INTO certifications (module_id, certification_name, certified)
                     VALUES (?, ?, ?)
                 """, (module_id, cert_name, certified))
-        
+
         # Insert additional certifications
         if certification_info.certifications:
             for cert in certification_info.certifications:
@@ -367,7 +370,7 @@ class PVModuleDatabase:
                     INSERT INTO certifications (module_id, certification_name, certified)
                     VALUES (?, ?, ?)
                 """, (module_id, cert, True))
-    
+
     def _insert_raw_data(self, cursor, module_id: int, raw_pan_data: dict) -> None:
         """Helper method to insert raw PAN data."""
         for key, value in raw_pan_data.items():
@@ -375,21 +378,21 @@ class PVModuleDatabase:
                 INSERT INTO raw_pan_data (module_id, parameter_name, parameter_value)
                 VALUES (?, ?, ?)
             """, (module_id, key, str(value)))
-    
+
     def get_module_by_id(self, module_id: int) -> Optional[Dict]:
         """Get a module by its database ID."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            
+
             cursor.execute("SELECT * FROM pv_modules WHERE id = ?", (module_id,))
             row = cursor.fetchone()
-            
+
             if row:
                 return dict(row)
             return None
-    
-    def search_modules(self, 
+
+    def search_modules(self,
                       manufacturer: Optional[str] = None,
                       model: Optional[str] = None,
                       min_power: Optional[float] = None,
@@ -400,7 +403,7 @@ class PVModuleDatabase:
                       limit: Optional[int] = None) -> List[Dict]:
         """
         Search modules with various filters.
-        
+
         Args:
             manufacturer: Filter by manufacturer name (partial match)
             model: Filter by model name (partial match)
@@ -410,115 +413,115 @@ class PVModuleDatabase:
             max_efficiency: Maximum efficiency in %
             cell_type: Filter by cell type
             limit: Maximum number of results
-            
+
         Returns:
             List of matching modules
         """
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            
+
             query = "SELECT * FROM pv_modules WHERE 1=1"
             params = []
-            
+
             if manufacturer:
                 query += " AND manufacturer LIKE ?"
                 params.append(f"%{manufacturer}%")
-            
+
             if model:
                 query += " AND model LIKE ?"
                 params.append(f"%{model}%")
-            
+
             if min_power is not None:
                 query += " AND pmax_stc >= ?"
                 params.append(min_power)
-            
+
             if max_power is not None:
                 query += " AND pmax_stc <= ?"
                 params.append(max_power)
-            
+
             if min_efficiency is not None:
                 query += " AND efficiency_stc >= ?"
                 params.append(min_efficiency)
-            
+
             if max_efficiency is not None:
                 query += " AND efficiency_stc <= ?"
                 params.append(max_efficiency)
-            
+
             if cell_type:
                 query += " AND cell_type = ?"
                 params.append(cell_type)
-            
+
             query += " ORDER BY pmax_stc DESC"
-            
+
             if limit:
                 query += " LIMIT ?"
                 params.append(limit)
-            
+
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
-    
+
     def get_manufacturers(self) -> List[str]:
         """Get list of all manufacturers in the database."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT DISTINCT manufacturer FROM pv_modules ORDER BY manufacturer")
             return [row[0] for row in cursor.fetchall()]
-    
+
     def get_models_by_manufacturer(self, manufacturer: str) -> List[str]:
         """Get list of models for a specific manufacturer."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT DISTINCT model FROM pv_modules 
-                WHERE manufacturer = ? 
+                SELECT DISTINCT model FROM pv_modules
+                WHERE manufacturer = ?
                 ORDER BY model
             """, (manufacturer,))
             return [row[0] for row in cursor.fetchall()]
-    
+
     def get_statistics(self) -> Dict[str, Union[int, float]]:
         """Get database statistics."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            
+
             # Basic counts
             cursor.execute("SELECT COUNT(*) FROM pv_modules")
             total_modules = cursor.fetchone()[0]
-            
+
             cursor.execute("SELECT COUNT(DISTINCT manufacturer) FROM pv_modules")
             total_manufacturers = cursor.fetchone()[0]
-            
+
             # Power statistics
             cursor.execute("""
-                SELECT 
+                SELECT
                     MIN(pmax_stc) as min_power,
                     MAX(pmax_stc) as max_power,
                     AVG(pmax_stc) as avg_power
-                FROM pv_modules 
+                FROM pv_modules
                 WHERE pmax_stc IS NOT NULL
             """)
             power_stats = cursor.fetchone()
-            
+
             # Efficiency statistics
             cursor.execute("""
-                SELECT 
+                SELECT
                     MIN(efficiency_stc) as min_efficiency,
                     MAX(efficiency_stc) as max_efficiency,
                     AVG(efficiency_stc) as avg_efficiency
-                FROM pv_modules 
+                FROM pv_modules
                 WHERE efficiency_stc IS NOT NULL
             """)
             efficiency_stats = cursor.fetchone()
-            
+
             # Cell type distribution
             cursor.execute("""
-                SELECT cell_type, COUNT(*) as count 
-                FROM pv_modules 
-                GROUP BY cell_type 
+                SELECT cell_type, COUNT(*) as count
+                FROM pv_modules
+                GROUP BY cell_type
                 ORDER BY count DESC
             """)
             cell_types = dict(cursor.fetchall())
-            
+
             return {
                 "total_modules": total_modules,
                 "total_manufacturers": total_manufacturers,
@@ -530,47 +533,47 @@ class PVModuleDatabase:
                 "avg_efficiency": efficiency_stats[2] if efficiency_stats[2] else 0,
                 "cell_type_distribution": cell_types
             }
-    
+
     def export_to_csv(self, output_file: str, filters: Optional[Dict] = None) -> int:
         """
         Export modules to CSV file.
-        
+
         Args:
             output_file: Path to output CSV file
             filters: Optional filters to apply (same as search_modules)
-            
+
         Returns:
             Number of modules exported
         """
         import csv
-        
+
         # Get modules with filters
         if filters:
             modules = self.search_modules(**filters)
         else:
             modules = self.search_modules()
-        
+
         if not modules:
             return 0
-        
+
         # Write to CSV
         with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
             fieldnames = modules[0].keys()
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            
+
             writer.writeheader()
             for module in modules:
                 writer.writerow(module)
-        
+
         return len(modules)
-    
+
     def compare_modules(self, module_ids: List[int]) -> List[Dict]:
         """
         Compare multiple modules side by side.
-        
+
         Args:
             module_ids: List of module IDs to compare
-            
+
         Returns:
             List of module data for comparison
         """
@@ -579,17 +582,17 @@ class PVModuleDatabase:
             module = self.get_module_by_id(module_id)
             if module:
                 modules.append(module)
-        
+
         return modules
-    
+
     def bulk_insert_from_parser_results(self, results: Dict[str, ParsingResult], update_existing: bool = True) -> Dict[str, int]:
         """
         Bulk insert modules from parser results.
-        
+
         Args:
             results: Dictionary of parsing results from parser
             update_existing: Whether to update existing modules or skip them
-            
+
         Returns:
             Dictionary with statistics of insertion
         """
@@ -597,7 +600,7 @@ class PVModuleDatabase:
         updated = 0
         skipped = 0
         failed = 0
-        
+
         for file_path, result in results.items():
             if result.success and result.module:
                 try:
@@ -615,7 +618,7 @@ class PVModuleDatabase:
                     failed += 1
             else:
                 failed += 1
-        
+
         return {
             "inserted": inserted,
             "updated": updated,
@@ -623,14 +626,33 @@ class PVModuleDatabase:
             "failed": failed,
             "total": len(results)
         }
-    
+
     def clear_database(self) -> None:
         """Clear all data from the database (for testing purposes)."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM raw_pan_data")
-            cursor.execute("DELETE FROM certifications")
-            cursor.execute("DELETE FROM pv_modules")
-            conn.commit()
-            print("Database cleared successfully")
+        import gc
+        import time
 
+        # Force garbage collection to close any lingering connections
+        gc.collect()
+        time.sleep(0.1)  # Small delay
+
+        try:
+            if self.db_path.exists():
+                # Remove the entire database file to force schema recreation
+                self.db_path.unlink()
+                print("Database file deleted successfully")
+            else:
+                print("No database file found")
+        except PermissionError:
+            # Fallback: just clear the data if file is locked
+            print("Database file locked, clearing data instead")
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("DROP TABLE IF EXISTS raw_pan_data")
+                cursor.execute("DROP TABLE IF EXISTS certifications")
+                cursor.execute("DROP TABLE IF EXISTS pv_modules")
+                conn.commit()
+                print("Database tables dropped successfully")
+
+        # Reinitialize with new schema
+        self.init_database()
