@@ -97,10 +97,15 @@ class ElectricalParameters(BaseModel):
 
 
 class PhysicalParameters(BaseModel):
-    """Physical parameters of a PV module."""
+    """Physical parameters of a PV module.
 
-    height: Optional[float] = Field(None, description="Module height (mm)")
+    Note: 'height' corresponds to the vertical dimension when mounted,
+           while 'width' is the horizontal dimension.
+    """
+
+    # Renamed fields to match parser output
     width: Optional[float] = Field(None, description="Module width (mm)")
+    height: Optional[float] = Field(None, description="Module height (mm)")
     thickness: Optional[float] = Field(None, description="Module thickness (mm)")
     weight: Optional[float] = Field(None, description="Module weight (kg)")
     area: Optional[float] = Field(None, description="Front surface area (m²)")
@@ -111,7 +116,7 @@ class PhysicalParameters(BaseModel):
     cell_area: Optional[float] = Field(None, description="Area of a single cell (cm²)")
 
     # Validators
-    @validator('height', 'width', 'thickness', 'weight', 'cell_area', 'area')
+    @validator('width', 'height', 'thickness', 'weight', 'cell_area', 'area')
     def validate_positive(cls, v):
         if v is not None and v <= 0:
             raise ValueError('Physical parameters must be positive')
@@ -124,9 +129,9 @@ class PhysicalParameters(BaseModel):
             self.total_cells = self.cells_in_series * self.cells_in_parallel
 
         # Calculate area if possible
-        if self.height is not None and self.width is not None:
+        if self.width is not None and self.height is not None:
             # Convert mm to m²
-            self.area = (self.height / 1000) * (self.width / 1000)
+            self.area = (self.width / 1000) * (self.height / 1000)
 
         return self
 
@@ -210,8 +215,8 @@ class PVModule(BaseModel):
     @model_validator(mode='after')
     def set_module_type_based_on_properties(self):
         """Set module type based on bifaciality and other properties."""
-        electrical = self.electrical_params
-        if electrical and electrical.bifaciality_factor and electrical.bifaciality_factor > 0:
+        if (self.electrical_params.bifaciality_factor and
+            self.electrical_params.bifaciality_factor > 0):
             self.module_type = ModuleType.BIFACIAL
         return self
 
