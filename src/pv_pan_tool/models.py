@@ -3,9 +3,9 @@
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, model_validator, validator
 
 
 class CellType(str, Enum):
@@ -13,10 +13,13 @@ class CellType(str, Enum):
     MONOCRYSTALLINE = "monocrystalline"
     POLYCRYSTALLINE = "polycrystalline"
     THIN_FILM = "thin_film"
+    CIS = "cis"  # Copper indium selenide
+    CIGS = "cigs"  # Copper indium gallium selenide
+    CDTE = "cdte"  # Cadmium telluride
     PERC = "perc"
     BIFACIAL = "bifacial"
-    HJT = "hjt"
-    IBC = "ibc"
+    HJT = "hjt"  # Heterojunction
+    IBC = "ibc"  # Interdigitated back contact
     UNKNOWN = "unknown"
 
 
@@ -33,50 +36,99 @@ class ModuleType(str, Enum):
 class ElectricalParameters(BaseModel):
     """Electrical parameters of a PV module."""
 
+    # Standard test conditions (STC)
     pmax_stc: Optional[float] = Field(None, description="Maximum power at STC (W)")
     vmp_stc: Optional[float] = Field(None, description="Voltage at maximum power at STC (V)")
     imp_stc: Optional[float] = Field(None, description="Current at maximum power at STC (A)")
     voc_stc: Optional[float] = Field(None, description="Open circuit voltage at STC (V)")
     isc_stc: Optional[float] = Field(None, description="Short circuit current at STC (A)")
 
+    # Temperature coefficients (%/°C)
     temp_coeff_pmax: Optional[float] = Field(None, description="Temperature coefficient of Pmax")
     temp_coeff_voc: Optional[float] = Field(None, description="Temperature coefficient of Voc")
     temp_coeff_isc: Optional[float] = Field(None, description="Temperature coefficient of Isc")
 
-    noct: Optional[float] = Field(None, description="Nominal Operating Cell Temperature")
-    series_fuse_rating: Optional[float] = Field(None, description="Series fuse rating (A)")
+    # Reference conditions
+    g_ref: Optional[float] = Field(1000.0, description="Reference irradiance (W/m²)")
+    t_ref: Optional[float] = Field(25.0, description="Reference temperature (°C)")
+
+    # Module configuration
+    noct: Optional[float] = Field(None, description="Nominal Operating Cell Temperature (°C)")
+    bypass_diodes: Optional[int] = Field(None, description="Number of bypass diodes")
     max_system_voltage: Optional[float] = Field(None, description="Maximum system voltage (V)")
 
-    @validator('pmax_stc')
-    def validate_power(cls, v):
+    # Resistance parameters
+    r_series: Optional[float] = Field(None, description="Series resistance (Ω)")
+    r_shunt: Optional[float] = Field(None, description="Shunt resistance (Ω)")
+
+    # Bifacial properties
+    bifaciality_factor: Optional[float] = Field(None, description="Bifaciality factor (0-1)")
+
+    # Incidence Angle Modifier (IAM) profile
+    iam_0: Optional[float] = Field(None, description="IAM at 0° incidence")
+    iam_30: Optional[float] = Field(None, description="IAM at 30° incidence")
+    iam_45: Optional[float] = Field(None, description="IAM at 45° incidence")
+    iam_60: Optional[float] = Field(None, description="IAM at 60° incidence")
+    iam_70: Optional[float] = Field(None, description="IAM at 70° incidence")
+    iam_75: Optional[float] = Field(None, description="IAM at 75° incidence")
+    iam_80: Optional[float] = Field(None, description="IAM at 80° incidence")
+    iam_85: Optional[float] = Field(None, description="IAM at 85° incidence")
+    iam_90: Optional[float] = Field(None, description="IAM at 90° incidence")
+
+    # Validators
+    @validator('pmax_stc', 'vmp_stc', 'imp_stc', 'voc_stc', 'isc_stc',
+               'r_series', 'r_shunt', 'max_system_voltage')
+    def validate_positive(cls, v):
         if v is not None and v <= 0:
-            raise ValueError('Power must be positive')
+            raise ValueError('Value must be positive')
         return v
 
-    @validator('voc_stc', 'vmp_stc', 'isc_stc', 'imp_stc')
-    def validate_electrical(cls, v):
-        if v is not None and v <= 0:
-            raise ValueError('Electrical parameters must be positive')
+    @validator('bifaciality_factor')
+    def validate_bifacial_range(cls, v):
+        if v is not None and (v < 0 or v > 1):
+            raise ValueError('Bifaciality factor must be between 0 and 1')
+        return v
+
+    @validator('iam_0', 'iam_30', 'iam_45', 'iam_60', 'iam_70', 'iam_75', 'iam_80', 'iam_85', 'iam_90')
+    def validate_iam_range(cls, v):
+        if v is not None and (v < 0 or v > 1):
+            raise ValueError('IAM values must be between 0 and 1')
         return v
 
 
 class PhysicalParameters(BaseModel):
     """Physical parameters of a PV module."""
 
-    length: Optional[float] = Field(None, description="Module length (mm)")
+    height: Optional[float] = Field(None, description="Module height (mm)")
     width: Optional[float] = Field(None, description="Module width (mm)")
     thickness: Optional[float] = Field(None, description="Module thickness (mm)")
     weight: Optional[float] = Field(None, description="Module weight (kg)")
+    area: Optional[float] = Field(None, description="Front surface area (m²)")
 
     cells_in_series: Optional[int] = Field(None, description="Number of cells in series")
     cells_in_parallel: Optional[int] = Field(None, description="Number of cells in parallel")
     total_cells: Optional[int] = Field(None, description="Total number of cells")
+    cell_area: Optional[float] = Field(None, description="Area of a single cell (cm²)")
 
-    @validator('length', 'width', 'thickness', 'weight')
+    # Validators
+    @validator('height', 'width', 'thickness', 'weight', 'cell_area', 'area')
     def validate_positive(cls, v):
         if v is not None and v <= 0:
             raise ValueError('Physical parameters must be positive')
         return v
+
+    @model_validator(mode='after')
+    def calculate_derived_fields(self):
+        # Calculate total cells if possible
+        if self.cells_in_series is not None and self.cells_in_parallel is not None:
+            self.total_cells = self.cells_in_series * self.cells_in_parallel
+
+        # Calculate area if possible
+        if self.height is not None and self.width is not None:
+            # Convert mm to m²
+            self.area = (self.height / 1000) * (self.width / 1000)
+
+        return self
 
 
 class CertificationInfo(BaseModel):
@@ -86,8 +138,9 @@ class CertificationInfo(BaseModel):
     iec_61730: Optional[bool] = Field(None, description="IEC 61730 certified")
     ul_listed: Optional[bool] = Field(None, description="UL listed")
     ce_marking: Optional[bool] = Field(None, description="CE marking")
+    sandia_certified: Optional[bool] = Field(None, description="Sandia certified")
 
-    certifications: Optional[List[str]] = Field(default_factory=list, description="Additional certifications")
+    certifications: List[str] = Field(default_factory=list, description="Additional certifications")
 
 
 class ManufacturerInfo(BaseModel):
@@ -96,8 +149,8 @@ class ManufacturerInfo(BaseModel):
     name: str = Field(..., description="Manufacturer name")
     model: str = Field(..., description="Model name/number")
     series: Optional[str] = Field(None, description="Product series")
-
-    manufacturing_date: Optional[datetime] = Field(None, description="Manufacturing date")
+    data_source: Optional[str] = Field(None, description="Data source specification")
+    year: Optional[int] = Field(None, description="Year of product introduction")
     country_of_origin: Optional[str] = Field(None, description="Country of manufacture")
 
 
@@ -108,9 +161,8 @@ class FileMetadata(BaseModel):
     file_name: str = Field(..., description="Name of the .PAN file")
     file_size: int = Field(..., description="File size in bytes")
     file_hash: str = Field(..., description="SHA-256 hash of the file content")
-
+    last_modified: datetime = Field(..., description="Last modification timestamp")
     parsed_at: datetime = Field(default_factory=datetime.now, description="When the file was parsed")
-    parser_version: str = Field(default="1.0.0", description="Version of the parser used")
 
     manufacturer_folder: Optional[str] = Field(None, description="Manufacturer folder name")
     model_folder: Optional[str] = Field(None, description="Model folder name")
@@ -122,12 +174,17 @@ class PVModule(BaseModel):
     manufacturer_info: ManufacturerInfo
     electrical_params: ElectricalParameters
     physical_params: PhysicalParameters
-    cell_type: CellType = CellType.UNKNOWN
-    module_type: ModuleType = ModuleType.STANDARD
-    certification_info: CertificationInfo
+    certification_info: CertificationInfo = Field(default_factory=CertificationInfo)
     file_metadata: FileMetadata
-    raw_pan_data: Dict[str, Union[str, float, int]] = Field(default_factory=dict)
+
+    # Technical specifications
+    cell_type: CellType = Field(CellType.UNKNOWN, description="Solar cell technology")
+    module_type: ModuleType = Field(ModuleType.STANDARD, description="Module construction type")
+    technology: Optional[str] = Field(None, description="Raw technology string from .pan file")
+
+    # Additional metadata
     notes: Optional[str] = Field(None, description="Additional notes")
+    raw_data: Dict[str, Any] = Field(default_factory=dict, description="Raw parsed data")
 
     class Config:
         json_encoders = {
@@ -143,13 +200,20 @@ class PVModule(BaseModel):
     @property
     def efficiency_stc(self) -> Optional[float]:
         """Calculate module efficiency at STC."""
-        if (self.electrical_params.pmax_stc and
-            self.physical_params.length and
-            self.physical_params.width):
+        pmax = self.electrical_params.pmax_stc
+        area = self.physical_params.area
 
-            area_m2 = (self.physical_params.length * self.physical_params.width) / 1_000_000
-            return (self.electrical_params.pmax_stc / (area_m2 * 1000)) * 100
+        if pmax and area:
+            return (pmax / (area * 1000)) * 100  # Convert to percentage
         return None
+
+    @model_validator(mode='after')
+    def set_module_type_based_on_properties(self):
+        """Set module type based on bifaciality and other properties."""
+        electrical = self.electrical_params
+        if electrical and electrical.bifaciality_factor and electrical.bifaciality_factor > 0:
+            self.module_type = ModuleType.BIFACIAL
+        return self
 
 
 class ParsedFileRegistry(BaseModel):
@@ -160,7 +224,7 @@ class ParsedFileRegistry(BaseModel):
     file_size: int
     last_modified: datetime
     parsed_at: datetime
-    parser_version: str
+    parser_version: str = Field("1.0.0", description="Parser version used")
     success: bool
     error_message: Optional[str] = None
 
