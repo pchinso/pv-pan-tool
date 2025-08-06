@@ -162,6 +162,16 @@ class PANFileParser:
         except Exception as e:
             print(f"Warning: Could not save registry: {e}")
 
+    def clear_registry(self) -> None:
+        """Clear the parsing registry to force re-parsing of all files."""
+        self.registry = {}
+        # Also remove the registry file if it exists
+        try:
+            if self.registry_file.exists():
+                self.registry_file.unlink()
+        except Exception as e:
+            print(f"Warning: Could not remove registry file: {e}")
+
     def calculate_file_hash(self, file_path: Path) -> str:
         """Calculate SHA-256 hash of file content."""
         sha256_hash = hashlib.sha256()

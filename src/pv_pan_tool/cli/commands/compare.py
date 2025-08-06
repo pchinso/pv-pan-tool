@@ -184,9 +184,7 @@ def get_top_modules_by_power(db, count, cell_type, verbose):
         criteria['cell_type'] = cell_type
     
     return db.search_modules(
-        criteria=criteria,
-        sort_by='pmax_stc',
-        sort_order='desc',
+        cell_type=cell_type,
         limit=count
     )
 
@@ -198,45 +196,28 @@ def get_top_modules_by_efficiency(db, count, cell_type, verbose):
         criteria['cell_type'] = cell_type
     
     return db.search_modules(
-        criteria=criteria,
-        sort_by='efficiency_stc',
-        sort_order='desc',
+        cell_type=cell_type,
         limit=count
     )
 
 
 def get_modules_by_manufacturer_model(db, manufacturer, model, limit, sort_by, cell_type, verbose):
     """Get modules by manufacturer and/or model."""
-    criteria = {}
-    
-    if manufacturer:
-        manufacturers = [m.strip() for m in manufacturer.split(',')]
-        criteria['manufacturer_list'] = manufacturers
-    
-    if model:
-        models = [m.strip() for m in model.split(',')]
-        criteria['model_list'] = models
-    
-    if cell_type:
-        criteria['cell_type'] = cell_type
-    
     return db.search_modules(
-        criteria=criteria,
-        sort_by=sort_by,
-        sort_order='desc',
+        manufacturer=manufacturer,
+        model=model,
+        cell_type=cell_type,
         limit=limit
     )
 
 
 def get_modules_by_ranges(db, power_range, efficiency_range, limit, sort_by, cell_type, verbose):
     """Get modules by power and/or efficiency ranges."""
-    criteria = {}
+    power_min = power_max = eff_min = eff_max = None
     
     if power_range:
         try:
             power_min, power_max = map(float, power_range.split('-'))
-            criteria['power_min'] = power_min
-            criteria['power_max'] = power_max
         except ValueError:
             console.print(f"[red]Invalid power range format: {power_range}[/red]")
             console.print("Use format: min-max (e.g., 500-600)")
@@ -245,20 +226,17 @@ def get_modules_by_ranges(db, power_range, efficiency_range, limit, sort_by, cel
     if efficiency_range:
         try:
             eff_min, eff_max = map(float, efficiency_range.split('-'))
-            criteria['efficiency_min'] = eff_min
-            criteria['efficiency_max'] = eff_max
         except ValueError:
             console.print(f"[red]Invalid efficiency range format: {efficiency_range}[/red]")
             console.print("Use format: min-max (e.g., 20.5-22.0)")
             raise click.Abort()
     
-    if cell_type:
-        criteria['cell_type'] = cell_type
-    
     return db.search_modules(
-        criteria=criteria,
-        sort_by=sort_by,
-        sort_order='desc',
+        min_power=power_min,
+        max_power=power_max,
+        min_efficiency=eff_min,
+        max_efficiency=eff_max,
+        cell_type=cell_type,
         limit=limit
     )
 
@@ -396,13 +374,11 @@ def details(ctx, module_id, manufacturer, model, include_raw):
             
         elif manufacturer or model:
             # Show details for modules matching criteria
-            criteria = {}
-            if manufacturer:
-                criteria['manufacturer'] = manufacturer
-            if model:
-                criteria['model'] = model
-            
-            modules = db.search_modules(criteria=criteria, limit=10)
+            modules = db.search_modules(
+                manufacturer=manufacturer,
+                model=model,
+                limit=10
+            )
             
             if not modules:
                 console.print("[yellow]No modules found matching criteria.[/yellow]")

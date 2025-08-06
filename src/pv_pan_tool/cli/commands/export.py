@@ -155,9 +155,13 @@ def export(ctx, export_format, output, manufacturer, model, power_min, power_max
         # Get data to export
         with console.status("[bold green]Querying database..."):
             modules = db.search_modules(
-                criteria=criteria,
-                sort_by=sort_by,
-                sort_order=sort_order,
+                manufacturer=manufacturer,
+                model=model,
+                min_power=power_min,
+                max_power=power_max,
+                min_efficiency=efficiency_min,
+                max_efficiency=efficiency_max,
+                cell_type=cell_type,
                 limit=limit
             )
         

@@ -96,8 +96,8 @@ def info(ctx):
         info_text.append(f"Database Path: {db_path}\n")
         info_text.append(f"Total Modules: {stats['total_modules']}\n")
         info_text.append(f"Total Manufacturers: {stats['total_manufacturers']}\n")
-        info_text.append(f"Power Range: {stats['power_range']['min']:.1f}W - {stats['power_range']['max']:.1f}W\n")
-        info_text.append(f"Efficiency Range: {stats['efficiency_range']['min']:.1f}% - {stats['efficiency_range']['max']:.1f}%\n")
+        info_text.append(f"Power Range: {stats['min_power']:.1f}W - {stats['max_power']:.1f}W\n")
+        info_text.append(f"Efficiency Range: {stats['min_efficiency']:.1f}% - {stats['max_efficiency']:.1f}%\n")
         
         if verbose:
             info_text.append(f"\nConfiguration:\n", style="bold")

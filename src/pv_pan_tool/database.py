@@ -9,7 +9,7 @@ import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .models import ParsingResult, PVModule
 
@@ -533,6 +533,44 @@ class PVModuleDatabase:
                 "avg_efficiency": efficiency_stats[2] if efficiency_stats[2] else 0,
                 "cell_type_distribution": cell_types
             }
+
+    def get_manufacturer_statistics(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Get statistics grouped by manufacturer."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            query = """
+                SELECT 
+                    manufacturer,
+                    COUNT(*) as module_count,
+                    AVG(pmax_stc) as avg_power,
+                    AVG(efficiency_stc) as avg_efficiency,
+                    MIN(pmax_stc) as min_power,
+                    MAX(pmax_stc) as max_power
+                FROM pv_modules 
+                WHERE pmax_stc IS NOT NULL
+                GROUP BY manufacturer
+                ORDER BY module_count DESC
+            """
+            
+            if limit:
+                query += f" LIMIT {limit}"
+                
+            cursor.execute(query)
+            results = cursor.fetchall()
+            
+            return [
+                {
+                    "manufacturer": row[0],
+                    "module_count": row[1],
+                    "avg_power": round(row[2], 1) if row[2] else 0,
+                    "avg_efficiency": round(row[3], 2) if row[3] else 0,
+                    "min_power": row[4] if row[4] else 0,
+                    "max_power": row[5] if row[5] else 0,
+                    "power_range": f"{row[4]:.0f}-{row[5]:.0f}W" if row[4] and row[5] else "N/A"
+                }
+                for row in results
+            ]
 
     def export_to_csv(self, output_file: str, filters: Optional[Dict] = None) -> int:
         """

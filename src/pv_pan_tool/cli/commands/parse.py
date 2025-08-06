@@ -105,13 +105,13 @@ def parse(ctx, input_dir, max_files, new_only, force, output_db, dry_run):
         
         # Scan for files
         with console.status("[bold green]Scanning for .PAN files..."):
-            all_files = parser.scan_pan_files()
+            all_files = parser.scan_directory()
         
         console.print(f"[green]Found {len(all_files)} total .PAN files[/green]")
         
         if new_only and not force:
             # Filter for new/modified files only
-            new_files = parser.get_new_or_modified_files(all_files)
+            new_files = parser.get_new_files(all_files)
             files_to_process = new_files
             console.print(f"[blue]New/modified files to process: {len(files_to_process)}[/blue]")
         else:

@@ -5,6 +5,7 @@ This package contains the command-line interface implementation including
 commands, utilities, and configuration management.
 """
 
-from .main import main
+# Don't import main here to avoid module loading conflicts
+# The main function is imported in cli.py when needed
 
-__all__ = ["main"]
+__all__ = []
