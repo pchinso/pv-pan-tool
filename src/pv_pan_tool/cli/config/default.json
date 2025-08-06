@@ -1,0 +1,30 @@
+{
+    "pan_directory": "C:\\Users\\slpcs.ABG\\OneDrive - Cox\\PAN_catalog\\01. Modulos",
+    "database_path": "data/database/pv_modules.db",
+    "output_directory": "output",
+    "max_files_per_batch": 100,
+    "default_export_format": "csv",
+    "verbose_output": false,
+    "auto_backup": true,
+    "backup_directory": "backups",
+    "supported_extensions": [".pan", ".PAN"],
+    "encoding_fallbacks": ["utf-8", "latin-1", "cp1252", "iso-8859-1"],
+    "display_settings": {
+        "table_max_width": 120,
+        "pagination_size": 20,
+        "decimal_places": 2,
+        "show_progress_bars": true
+    },
+    "search_defaults": {
+        "sort_by": "pmax_stc",
+        "sort_order": "desc",
+        "include_null_values": false
+    },
+    "export_defaults": {
+        "include_metadata": true,
+        "include_raw_data": false,
+        "csv_delimiter": ",",
+        "excel_sheet_name": "PV_Modules"
+    }
+}
+

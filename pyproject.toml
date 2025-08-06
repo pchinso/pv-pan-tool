@@ -6,7 +6,7 @@ build-backend = "poetry.core.masonry.api"
 name = "pv-pan-tool"
 version = "0.1.0"
 description = "PV Module Comparison Tool - Parse .PAN files and compare solar panel specifications"
-authors = ["Developer <developer@example.com>"]
+authors = ["Your Name <chinso@gmail.com>"]
 readme = "README.md"
 license = "MIT"
 packages = [{include = "pv_pan_tool", from = "src"}]
@@ -18,6 +18,7 @@ pandas = "^2.0.0"
 sqlalchemy = "^2.0.0"
 pydantic = "^2.0.0"
 rich = "^13.0.0"
+pathlib = "^1.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"
