@@ -5,15 +5,16 @@ This module provides functionality to compare multiple PV modules
 side by side with detailed parameter analysis.
 """
 
-import click
 from pathlib import Path
+
+import click
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 
 from ...database import PVModuleDatabase
 from ..utils.config import get_config
-from ..utils.formatters import format_comparison_table, format_json, format_csv
+from ..utils.formatters import format_comparison_table, format_csv, format_json
 
 console = Console()
 
@@ -79,15 +80,15 @@ console = Console()
     help="Sort modules by parameter"
 )
 @click.pass_context
-def compare(ctx, ids, manufacturer, model, top_power, top_efficiency, 
-           power_range, efficiency_range, cell_type, limit, output_format, 
+def compare(ctx, ids, manufacturer, model, top_power, top_efficiency,
+           power_range, efficiency_range, cell_type, limit, output_format,
            output, sort_by):
     """
     Compare multiple PV modules side by side.
-    
+
     Compare modules based on various selection criteria and display
     their specifications in a detailed comparison table.
-    
+
     Examples:
         pv-pan-tool compare --ids 1,2,3
         pv-pan-tool compare --top-power 5
@@ -97,55 +98,55 @@ def compare(ctx, ids, manufacturer, model, top_power, top_efficiency,
     """
     config = ctx.obj.get('config', {})
     verbose = ctx.obj.get('verbose', False)
-    
+
     # Get database path
-    db_path = get_config('database_path', 'data/database/pv_modules.db', 
+    db_path = get_config('database_path', 'data/database/pv_modules.db',
                         config_file=ctx.obj.get('config_file'))
-    
+
     try:
         db = PVModuleDatabase(str(db_path))
-        
+
         # Determine selection method and get modules
         modules = []
-        
+
         if ids:
             # Compare specific module IDs
             module_ids = [int(id.strip()) for id in ids.split(',')]
             modules = get_modules_by_ids(db, module_ids, verbose)
-            
+
         elif top_power:
             # Compare top modules by power
             modules = get_top_modules_by_power(db, top_power, cell_type, verbose)
-            
+
         elif top_efficiency:
             # Compare top modules by efficiency
             modules = get_top_modules_by_efficiency(db, top_efficiency, cell_type, verbose)
-            
+
         elif manufacturer or model:
             # Compare modules by manufacturer/model
-            modules = get_modules_by_manufacturer_model(db, manufacturer, model, 
+            modules = get_modules_by_manufacturer_model(db, manufacturer, model,
                                                        limit, sort_by, cell_type, verbose)
-            
+
         elif power_range or efficiency_range:
             # Compare modules in specified ranges
-            modules = get_modules_by_ranges(db, power_range, efficiency_range, 
+            modules = get_modules_by_ranges(db, power_range, efficiency_range,
                                           limit, sort_by, cell_type, verbose)
         else:
             console.print("[red]Error: Must specify comparison criteria.[/red]")
             console.print("Use one of: --ids, --top-power, --top-efficiency, --manufacturer, --power-range")
             raise click.Abort()
-        
+
         if not modules:
             console.print("[yellow]No modules found for comparison.[/yellow]")
             return
-        
+
         # Limit number of modules for comparison
         if len(modules) > limit:
             modules = modules[:limit]
             console.print(f"[yellow]Limited comparison to {limit} modules[/yellow]")
-        
+
         console.print(f"[green]Comparing {len(modules)} modules[/green]")
-        
+
         # Display comparison
         if output_format == 'table':
             show_comparison_table(modules, verbose)
@@ -153,11 +154,11 @@ def compare(ctx, ids, manufacturer, model, top_power, top_efficiency,
             show_comparison_json(modules)
         elif output_format == 'csv':
             show_comparison_csv(modules)
-        
+
         # Save to file if requested
         if output:
             save_comparison(modules, output, output_format, verbose)
-            
+
     except Exception as e:
         console.print(f"[red]Error during comparison: {e}[/red]")
         if verbose:
@@ -182,7 +183,7 @@ def get_top_modules_by_power(db, count, cell_type, verbose):
     criteria = {}
     if cell_type:
         criteria['cell_type'] = cell_type
-    
+
     return db.search_modules(
         cell_type=cell_type,
         limit=count
@@ -194,7 +195,7 @@ def get_top_modules_by_efficiency(db, count, cell_type, verbose):
     criteria = {}
     if cell_type:
         criteria['cell_type'] = cell_type
-    
+
     return db.search_modules(
         cell_type=cell_type,
         limit=count
@@ -214,7 +215,7 @@ def get_modules_by_manufacturer_model(db, manufacturer, model, limit, sort_by, c
 def get_modules_by_ranges(db, power_range, efficiency_range, limit, sort_by, cell_type, verbose):
     """Get modules by power and/or efficiency ranges."""
     power_min = power_max = eff_min = eff_max = None
-    
+
     if power_range:
         try:
             power_min, power_max = map(float, power_range.split('-'))
@@ -222,7 +223,7 @@ def get_modules_by_ranges(db, power_range, efficiency_range, limit, sort_by, cel
             console.print(f"[red]Invalid power range format: {power_range}[/red]")
             console.print("Use format: min-max (e.g., 500-600)")
             raise click.Abort()
-    
+
     if efficiency_range:
         try:
             eff_min, eff_max = map(float, efficiency_range.split('-'))
@@ -230,7 +231,7 @@ def get_modules_by_ranges(db, power_range, efficiency_range, limit, sort_by, cel
             console.print(f"[red]Invalid efficiency range format: {efficiency_range}[/red]")
             console.print("Use format: min-max (e.g., 20.5-22.0)")
             raise click.Abort()
-    
+
     return db.search_modules(
         min_power=power_min,
         max_power=power_max,
@@ -245,7 +246,7 @@ def show_comparison_table(modules, verbose):
     """Display comparison in table format."""
     table = format_comparison_table(modules, "Module Comparison")
     console.print(table)
-    
+
     if verbose:
         show_comparison_analysis(modules)
 
@@ -254,18 +255,18 @@ def show_comparison_analysis(modules):
     """Show additional analysis of the comparison."""
     if len(modules) < 2:
         return
-    
+
     # Calculate ranges and averages
     powers = [m.get('pmax_stc') for m in modules if m.get('pmax_stc')]
     efficiencies = [m.get('efficiency_stc') for m in modules if m.get('efficiency_stc')]
-    
+
     analysis_table = Table(title="Comparison Analysis")
     analysis_table.add_column("Metric", style="cyan")
     analysis_table.add_column("Min", style="red")
     analysis_table.add_column("Max", style="green")
     analysis_table.add_column("Average", style="blue")
     analysis_table.add_column("Range", style="yellow")
-    
+
     if powers:
         power_min, power_max = min(powers), max(powers)
         power_avg = sum(powers) / len(powers)
@@ -277,7 +278,7 @@ def show_comparison_analysis(modules):
             f"{power_avg:.1f}",
             f"{power_range:.1f}"
         )
-    
+
     if efficiencies:
         eff_min, eff_max = min(efficiencies), max(efficiencies)
         eff_avg = sum(efficiencies) / len(efficiencies)
@@ -289,7 +290,7 @@ def show_comparison_analysis(modules):
             f"{eff_avg:.2f}",
             f"{eff_range:.2f}"
         )
-    
+
     console.print(analysis_table)
 
 
@@ -314,12 +315,12 @@ def save_comparison(modules, output_path, output_format, verbose):
             content = format_csv(modules)
         else:  # table format - save as CSV
             content = format_csv(modules)
-        
+
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(content)
-        
+
         console.print(f"[green]Comparison saved to:[/green] {output_path}")
-        
+
     except Exception as e:
         console.print(f"[red]Error saving comparison: {e}[/red]")
 
@@ -347,7 +348,7 @@ def save_comparison(modules, output_path, output_format, verbose):
 def details(ctx, module_id, manufacturer, model, include_raw):
     """
     Show detailed information for specific modules.
-    
+
     Examples:
         pv-pan-tool details --module-id 123
         pv-pan-tool details --manufacturer "Jinko" --model "JKM590N"
@@ -355,23 +356,23 @@ def details(ctx, module_id, manufacturer, model, include_raw):
     """
     config = ctx.obj.get('config', {})
     verbose = ctx.obj.get('verbose', False)
-    
+
     # Get database path
-    db_path = get_config('database_path', 'data/database/pv_modules.db', 
+    db_path = get_config('database_path', 'data/database/pv_modules.db',
                         config_file=ctx.obj.get('config_file'))
-    
+
     try:
         db = PVModuleDatabase(str(db_path))
-        
+
         if module_id:
             # Show details for specific module
             module = db.get_module_by_id(module_id)
             if not module:
                 console.print(f"[red]Module with ID {module_id} not found.[/red]")
                 return
-            
+
             show_module_details(module, include_raw, db)
-            
+
         elif manufacturer or model:
             # Show details for modules matching criteria
             modules = db.search_modules(
@@ -379,11 +380,11 @@ def details(ctx, module_id, manufacturer, model, include_raw):
                 model=model,
                 limit=10
             )
-            
+
             if not modules:
                 console.print("[yellow]No modules found matching criteria.[/yellow]")
                 return
-            
+
             for i, module in enumerate(modules):
                 if i > 0:
                     console.print()  # Add spacing between modules
@@ -391,7 +392,7 @@ def details(ctx, module_id, manufacturer, model, include_raw):
         else:
             console.print("[red]Error: Must specify --module-id or --manufacturer/--model.[/red]")
             raise click.Abort()
-            
+
     except Exception as e:
         console.print(f"[red]Error showing details: {e}[/red]")
         if verbose:
@@ -408,20 +409,20 @@ Manufacturer: {module.get('manufacturer', 'N/A')}
 Model: {module.get('model', 'N/A')}
 Series: {module.get('series', 'N/A')}
 """
-    
+
     basic_panel = Panel(
         basic_info.strip(),
         title="Basic Information",
         border_style="blue"
     )
     console.print(basic_panel)
-    
+
     # Electrical parameters table
     elec_table = Table(title="Electrical Parameters (STC)")
     elec_table.add_column("Parameter", style="cyan")
     elec_table.add_column("Value", style="green")
     elec_table.add_column("Unit", style="dim")
-    
+
     elec_params = [
         ("Maximum Power", module.get('pmax_stc'), "W"),
         ("Voltage at Pmax", module.get('vmp_stc'), "V"),
@@ -430,7 +431,7 @@ Series: {module.get('series', 'N/A')}
         ("Short Circuit Current", module.get('isc_stc'), "A"),
         ("Efficiency", module.get('efficiency_stc'), "%"),
     ]
-    
+
     for param, value, unit in elec_params:
         if value is not None:
             if isinstance(value, float):
@@ -438,15 +439,15 @@ Series: {module.get('series', 'N/A')}
             else:
                 value_str = str(value)
             elec_table.add_row(param, value_str, unit)
-    
+
     console.print(elec_table)
-    
+
     # Physical parameters table
     phys_table = Table(title="Physical Parameters")
     phys_table.add_column("Parameter", style="cyan")
     phys_table.add_column("Value", style="green")
     phys_table.add_column("Unit", style="dim")
-    
+
     phys_params = [
         ("Length", module.get('length'), "mm"),
         ("Width", module.get('width'), "mm"),
@@ -457,7 +458,7 @@ Series: {module.get('series', 'N/A')}
         ("Cells in Series", module.get('cells_in_series'), ""),
         ("Total Cells", module.get('total_cells'), ""),
     ]
-    
+
     for param, value, unit in phys_params:
         if value is not None:
             if isinstance(value, float) and unit in ['mm', 'kg']:
@@ -465,9 +466,9 @@ Series: {module.get('series', 'N/A')}
             else:
                 value_str = str(value)
             phys_table.add_row(param, value_str, unit)
-    
+
     console.print(phys_table)
-    
+
     # File information
     file_info = f"""
 File Path: {module.get('file_path', 'N/A')}
@@ -475,14 +476,14 @@ File Name: {module.get('file_name', 'N/A')}
 File Size: {module.get('file_size', 'N/A')} bytes
 Parsed At: {module.get('parsed_at', 'N/A')}
 """
-    
+
     file_panel = Panel(
         file_info.strip(),
         title="File Information",
         border_style="yellow"
     )
     console.print(file_panel)
-    
+
     # Raw data if requested
     if include_raw:
         raw_data = db.get_raw_pan_data(module.get('id'))
@@ -497,4 +498,3 @@ Parsed At: {module.get('parsed_at', 'N/A')}
 
 # Remove the problematic line at the end
 # compare.add_command(details, name="details")
-

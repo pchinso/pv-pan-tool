@@ -5,11 +5,12 @@ This module provides search functionality for finding modules
 in the database based on various criteria.
 """
 
-import click
 from pathlib import Path
+
+import click
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 
 from ...database import PVModuleDatabase
 from ..utils.config import get_config
@@ -92,15 +93,15 @@ console = Console()
     help="Output format"
 )
 @click.pass_context
-def search(ctx, manufacturer, model, series, power_min, power_max, 
+def search(ctx, manufacturer, model, series, power_min, power_max,
           efficiency_min, efficiency_max, cell_type, module_type,
           sort_by, sort_order, limit, output, output_format):
     """
     Search for modules in the database.
-    
+
     Search for PV modules based on various criteria such as manufacturer,
     model, power rating, efficiency, cell type, and more.
-    
+
     Examples:
         pv-pan-tool search --manufacturer "Jinko"
         pv-pan-tool search --power-min 500 --power-max 600
@@ -110,14 +111,14 @@ def search(ctx, manufacturer, model, series, power_min, power_max,
     """
     config = ctx.obj.get('config', {})
     verbose = ctx.obj.get('verbose', False)
-    
+
     # Get database path
-    db_path = get_config('database_path', 'data/database/pv_modules.db', 
+    db_path = get_config('database_path', 'data/database/pv_modules.db',
                         config_file=ctx.obj.get('config_file'))
-    
+
     try:
         db = PVModuleDatabase(str(db_path))
-        
+
         # Build search criteria
         criteria = {}
         if manufacturer:
@@ -138,12 +139,12 @@ def search(ctx, manufacturer, model, series, power_min, power_max,
             criteria['cell_type'] = cell_type
         if module_type:
             criteria['module_type'] = module_type
-        
+
         if verbose:
             console.print(f"[blue]Search criteria:[/blue] {criteria}")
             console.print(f"[blue]Sort by:[/blue] {sort_by} ({sort_order})")
             console.print(f"[blue]Limit:[/blue] {limit}")
-        
+
         # Perform search
         with console.status("[bold green]Searching database..."):
             results = db.search_modules(
@@ -156,13 +157,13 @@ def search(ctx, manufacturer, model, series, power_min, power_max,
                 cell_type=cell_type,
                 limit=limit
             )
-        
+
         if not results:
             console.print("[yellow]No modules found matching the search criteria.[/yellow]")
             return
-        
+
         console.print(f"[green]Found {len(results)} modules[/green]")
-        
+
         # Format and display results
         if output_format == 'table':
             show_search_results_table(results, verbose)
@@ -170,11 +171,11 @@ def search(ctx, manufacturer, model, series, power_min, power_max,
             show_search_results_json(results)
         elif output_format == 'csv':
             show_search_results_csv(results)
-        
+
         # Save to file if requested
         if output:
             save_search_results(results, output, verbose)
-            
+
     except Exception as e:
         console.print(f"[red]Error during search: {e}[/red]")
         if verbose:
@@ -185,7 +186,7 @@ def search(ctx, manufacturer, model, series, power_min, power_max,
 def show_search_results_table(results, verbose):
     """Display search results in table format."""
     table = Table(title="Search Results")
-    
+
     # Add columns
     table.add_column("ID", style="cyan", width=4)
     table.add_column("Manufacturer", style="blue", width=12)
@@ -194,11 +195,11 @@ def show_search_results_table(results, verbose):
     table.add_column("Efficiency (%)", style="magenta", justify="right", width=10)
     table.add_column("Voc (V)", style="yellow", justify="right", width=7)
     table.add_column("Isc (A)", style="cyan", justify="right", width=7)
-    
+
     if verbose:
         table.add_column("Cell Type", style="dim", width=12)
         table.add_column("Dimensions", style="dim", width=12)
-    
+
     # Add rows
     for module in results:
         row = [
@@ -210,22 +211,22 @@ def show_search_results_table(results, verbose):
             f"{module.get('voc_stc', 0):.1f}" if module.get('voc_stc') else '',
             f"{module.get('isc_stc', 0):.2f}" if module.get('isc_stc') else '',
         ]
-        
+
         if verbose:
             row.extend([
                 module.get('cell_type', '')[:12],
                 f"{module.get('length', 0):.0f}x{module.get('width', 0):.0f}" if module.get('length') and module.get('width') else ''
             ])
-        
+
         table.add_row(*row)
-    
+
     console.print(table)
 
 
 def show_search_results_json(results):
     """Display search results in JSON format."""
     import json
-    
+
     # Convert to JSON-serializable format
     json_results = []
     for module in results:
@@ -234,7 +235,7 @@ def show_search_results_json(results):
             if value is not None:
                 json_module[key] = value
         json_results.append(json_module)
-    
+
     json_output = json.dumps(json_results, indent=2, ensure_ascii=False)
     console.print(json_output)
 
@@ -243,18 +244,18 @@ def show_search_results_csv(results):
     """Display search results in CSV format."""
     if not results:
         return
-    
+
     # Get all unique keys
     all_keys = set()
     for module in results:
         all_keys.update(module.keys())
-    
+
     # Sort keys for consistent output
     sorted_keys = sorted(all_keys)
-    
+
     # Print header
     console.print(','.join(sorted_keys))
-    
+
     # Print rows
     for module in results:
         row = []
@@ -274,29 +275,29 @@ def save_search_results(results, output_path, verbose):
     """Save search results to file."""
     try:
         import csv
-        
+
         if not results:
             console.print("[yellow]No results to save.[/yellow]")
             return
-        
+
         # Get all unique keys
         all_keys = set()
         for module in results:
             all_keys.update(module.keys())
-        
+
         sorted_keys = sorted(all_keys)
-        
+
         with open(output_path, 'w', newline='', encoding='utf-8') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=sorted_keys)
             writer.writeheader()
-            
+
             for module in results:
                 # Clean None values
                 clean_module = {k: v for k, v in module.items() if v is not None}
                 writer.writerow(clean_module)
-        
+
         console.print(f"[green]Results saved to:[/green] {output_path}")
-        
+
     except Exception as e:
         console.print(f"[red]Error saving results: {e}[/red]")
 
@@ -323,7 +324,7 @@ def save_search_results(results, output_path, verbose):
 def list_items(ctx, list_type, manufacturer, limit):
     """
     List manufacturers, models, or other categorical data.
-    
+
     Examples:
         pv-pan-tool list manufacturers
         pv-pan-tool list models --manufacturer "Jinko"
@@ -331,19 +332,19 @@ def list_items(ctx, list_type, manufacturer, limit):
     """
     config = ctx.obj.get('config', {})
     verbose = ctx.obj.get('verbose', False)
-    
+
     # Get database path
-    db_path = get_config('database_path', 'data/database/pv_modules.db', 
+    db_path = get_config('database_path', 'data/database/pv_modules.db',
                         config_file=ctx.obj.get('config_file'))
-    
+
     try:
         db = PVModuleDatabase(str(db_path))
-        
+
         if list_type == 'manufacturers':
             items = db.get_manufacturers()
             title = "Manufacturers"
             columns = ["Manufacturer", "Module Count"]
-            
+
         elif list_type == 'models':
             if manufacturer:
                 items = db.get_models_by_manufacturer(manufacturer)
@@ -352,7 +353,7 @@ def list_items(ctx, list_type, manufacturer, limit):
                 items = db.get_all_models()
                 title = "All Models"
             columns = ["Model", "Manufacturer", "Count"]
-            
+
         elif list_type == 'series':
             if manufacturer:
                 items = db.get_series_by_manufacturer(manufacturer)
@@ -361,40 +362,40 @@ def list_items(ctx, list_type, manufacturer, limit):
                 items = db.get_all_series()
                 title = "All Series"
             columns = ["Series", "Manufacturer", "Count"]
-            
+
         elif list_type == 'cell-types':
             items = db.get_cell_types()
             title = "Cell Types"
             columns = ["Cell Type", "Count"]
-            
+
         elif list_type == 'module-types':
             items = db.get_module_types()
             title = "Module Types"
             columns = ["Module Type", "Count"]
-        
+
         if not items:
             console.print(f"[yellow]No {list_type} found.[/yellow]")
             return
-        
+
         # Limit results
         if len(items) > limit:
             items = items[:limit]
             title += f" (showing first {limit})"
-        
+
         # Create table
         table = Table(title=title)
         for col in columns:
             table.add_column(col)
-        
+
         for item in items:
             if isinstance(item, dict):
                 row = [str(item.get(col.lower().replace(' ', '_'), '')) for col in columns]
             else:
                 row = [str(item)]
             table.add_row(*row)
-        
+
         console.print(table)
-        
+
     except Exception as e:
         console.print(f"[red]Error listing {list_type}: {e}[/red]")
         if verbose:
@@ -404,4 +405,3 @@ def list_items(ctx, list_type, manufacturer, limit):
 
 # Remove the problematic line at the end
 # search.add_command(list_items, name="list")
-

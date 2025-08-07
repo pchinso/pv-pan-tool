@@ -400,6 +400,10 @@ class PVModuleDatabase:
                       min_efficiency: Optional[float] = None,
                       max_efficiency: Optional[float] = None,
                       cell_type: Optional[str] = None,
+                      min_height: Optional[float] = None,
+                      max_height: Optional[float] = None,
+                      min_width: Optional[float] = None,
+                      max_width: Optional[float] = None,
                       limit: Optional[int] = None) -> List[Dict]:
         """
         Search modules with various filters.
@@ -412,6 +416,10 @@ class PVModuleDatabase:
             min_efficiency: Minimum efficiency in %
             max_efficiency: Maximum efficiency in %
             cell_type: Filter by cell type
+            min_height: Minimum height in mm
+            max_height: Maximum height in mm
+            min_width: Minimum width in mm
+            max_width: Maximum width in mm
             limit: Maximum number of results
 
         Returns:
@@ -451,6 +459,22 @@ class PVModuleDatabase:
             if cell_type:
                 query += " AND cell_type = ?"
                 params.append(cell_type)
+
+            if min_height is not None:
+                query += " AND height >= ?"
+                params.append(min_height)
+
+            if max_height is not None:
+                query += " AND height <= ?"
+                params.append(max_height)
+
+            if min_width is not None:
+                query += " AND width >= ?"
+                params.append(min_width)
+
+            if max_width is not None:
+                query += " AND width <= ?"
+                params.append(max_width)
 
             query += " ORDER BY pmax_stc DESC"
 
@@ -538,27 +562,27 @@ class PVModuleDatabase:
         """Get statistics grouped by manufacturer."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            
+
             query = """
-                SELECT 
+                SELECT
                     manufacturer,
                     COUNT(*) as module_count,
                     AVG(pmax_stc) as avg_power,
                     AVG(efficiency_stc) as avg_efficiency,
                     MIN(pmax_stc) as min_power,
                     MAX(pmax_stc) as max_power
-                FROM pv_modules 
+                FROM pv_modules
                 WHERE pmax_stc IS NOT NULL
                 GROUP BY manufacturer
                 ORDER BY module_count DESC
             """
-            
+
             if limit:
                 query += f" LIMIT {limit}"
-                
+
             cursor.execute(query)
             results = cursor.fetchall()
-            
+
             return [
                 {
                     "manufacturer": row[0],
