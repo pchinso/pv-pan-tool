@@ -1,0 +1,20 @@
+# Database settings
+database_path: "data/database/pv_modules.db"
+backup_directory: "data/backups"
+
+# Parsing settings
+default_input_directory: "data/pan_files"
+batch_size: 1000
+parallel_workers: 4
+
+# Output settings
+default_output_format: "table"
+include_details_by_default: false
+
+# Performance settings
+query_timeout: 30
+max_results_limit: 1000
+
+# Logging settings
+log_level: "INFO"
+log_file: "logs/pv_pan_tool.log"
