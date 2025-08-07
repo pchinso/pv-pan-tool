@@ -51,6 +51,26 @@ console = Console()
     help="Compare modules in efficiency range (format: min-max, e.g., 20.5-22.0)"
 )
 @click.option(
+    "--height-min",
+    type=float,
+    help="Minimum height (mm)"
+)
+@click.option(
+    "--height-max",
+    type=float,
+    help="Maximum height (mm)"
+)
+@click.option(
+    "--width-min",
+    type=float,
+    help="Minimum width (mm)"
+)
+@click.option(
+    "--width-max",
+    type=float,
+    help="Maximum width (mm)"
+)
+@click.option(
     "--cell-type", "-c",
     type=click.Choice(['monocrystalline', 'polycrystalline', 'thin_film', 'perc', 'bifacial', 'hjt', 'ibc']),
     help="Filter by cell type"
@@ -81,7 +101,8 @@ console = Console()
 )
 @click.pass_context
 def compare(ctx, ids, manufacturer, model, top_power, top_efficiency,
-           power_range, efficiency_range, cell_type, limit, output_format,
+           power_range, efficiency_range, height_min, height_max, width_min,
+           width_max, cell_type, limit, output_format,
            output, sort_by):
     """
     Compare multiple PV modules side by side.
@@ -116,21 +137,21 @@ def compare(ctx, ids, manufacturer, model, top_power, top_efficiency,
 
         elif top_power:
             # Compare top modules by power
-            modules = get_top_modules_by_power(db, top_power, cell_type, verbose)
+            modules = get_top_modules_by_power(db, top_power, cell_type, height_min, height_max, width_min, width_max, verbose)
 
         elif top_efficiency:
             # Compare top modules by efficiency
-            modules = get_top_modules_by_efficiency(db, top_efficiency, cell_type, verbose)
+            modules = get_top_modules_by_efficiency(db, top_efficiency, cell_type, height_min, height_max, width_min, width_max, verbose)
 
         elif manufacturer or model:
             # Compare modules by manufacturer/model
             modules = get_modules_by_manufacturer_model(db, manufacturer, model,
-                                                       limit, sort_by, cell_type, verbose)
+                                                       limit, sort_by, cell_type, height_min, height_max, width_min, width_max, verbose)
 
         elif power_range or efficiency_range:
             # Compare modules in specified ranges
             modules = get_modules_by_ranges(db, power_range, efficiency_range,
-                                          limit, sort_by, cell_type, verbose)
+                                          limit, sort_by, cell_type, height_min, height_max, width_min, width_max, verbose)
         else:
             console.print("[red]Error: Must specify comparison criteria.[/red]")
             console.print("Use one of: --ids, --top-power, --top-efficiency, --manufacturer, --power-range")
@@ -178,7 +199,7 @@ def get_modules_by_ids(db, module_ids, verbose):
     return modules
 
 
-def get_top_modules_by_power(db, count, cell_type, verbose):
+def get_top_modules_by_power(db, count, cell_type, height_min, height_max, width_min, width_max, verbose):
     """Get top modules by power rating."""
     criteria = {}
     if cell_type:
@@ -186,11 +207,15 @@ def get_top_modules_by_power(db, count, cell_type, verbose):
 
     return db.search_modules(
         cell_type=cell_type,
+        min_height=height_min,
+        max_height=height_max,
+        min_width=width_min,
+        max_width=width_max,
         limit=count
     )
 
 
-def get_top_modules_by_efficiency(db, count, cell_type, verbose):
+def get_top_modules_by_efficiency(db, count, cell_type, height_min, height_max, width_min, width_max, verbose):
     """Get top modules by efficiency."""
     criteria = {}
     if cell_type:
@@ -198,21 +223,29 @@ def get_top_modules_by_efficiency(db, count, cell_type, verbose):
 
     return db.search_modules(
         cell_type=cell_type,
+        min_height=height_min,
+        max_height=height_max,
+        min_width=width_min,
+        max_width=width_max,
         limit=count
     )
 
 
-def get_modules_by_manufacturer_model(db, manufacturer, model, limit, sort_by, cell_type, verbose):
+def get_modules_by_manufacturer_model(db, manufacturer, model, limit, sort_by, cell_type, height_min, height_max, width_min, width_max, verbose):
     """Get modules by manufacturer and/or model."""
     return db.search_modules(
         manufacturer=manufacturer,
         model=model,
         cell_type=cell_type,
+        min_height=height_min,
+        max_height=height_max,
+        min_width=width_min,
+        max_width=width_max,
         limit=limit
     )
 
 
-def get_modules_by_ranges(db, power_range, efficiency_range, limit, sort_by, cell_type, verbose):
+def get_modules_by_ranges(db, power_range, efficiency_range, limit, sort_by, cell_type, height_min, height_max, width_min, width_max, verbose):
     """Get modules by power and/or efficiency ranges."""
     power_min = power_max = eff_min = eff_max = None
 
@@ -237,6 +270,10 @@ def get_modules_by_ranges(db, power_range, efficiency_range, limit, sort_by, cel
         max_power=power_max,
         min_efficiency=eff_min,
         max_efficiency=eff_max,
+        min_height=height_min,
+        max_height=height_max,
+        min_width=width_min,
+        max_width=width_max,
         cell_type=cell_type,
         limit=limit
     )

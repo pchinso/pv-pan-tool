@@ -19,6 +19,10 @@ pv-pan-tool compare [OPTIONS]
 | `-e, --top-efficiency` | INTEGER | Compare top N modules by efficiency |
 | `-P, --power-range` | TEXT | Compare modules in power range (format: min-max) |
 | `-E, --efficiency-range` | TEXT | Compare modules in efficiency range (format: min-max) |
+| `--height-min` | FLOAT | Minimum height in mm |
+| `--height-max` | FLOAT | Maximum height in mm |
+| `--width-min` | FLOAT | Minimum width in mm |
+| `--width-max` | FLOAT | Maximum width in mm |
 | `-c, --cell-type` | CHOICE | Filter by cell type |
 | `-l, --limit` | INTEGER | Maximum number of modules to compare |
 | `-f, --format` | CHOICE | Output format: table, json, csv |
@@ -68,6 +72,9 @@ pv-pan-tool compare --efficiency-range 21.5-23 --limit 4
 
 # Combined ranges
 pv-pan-tool compare --power-range 650-700 --efficiency-range 22-23
+
+# Size based filtering
+pv-pan-tool compare --top-power 5 --height-max 2000
 ```
 
 ## Output Formats

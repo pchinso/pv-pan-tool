@@ -53,6 +53,26 @@ console = Console()
     help="Maximum efficiency (%)"
 )
 @click.option(
+    "--height-min", "-h",
+    type=float,
+    help="Minimum height (mm)"
+)
+@click.option(
+    "--height-max", "-H",
+    type=float,
+    help="Maximum height (mm)"
+)
+@click.option(
+    "--width-min", "-w",
+    type=float,
+    help="Minimum width (mm)"
+)
+@click.option(
+    "--width-max", "-W",
+    type=float,
+    help="Maximum width (mm)"
+)
+@click.option(
     "--cell-type", "-c",
     type=click.Choice(['monocrystalline', 'polycrystalline', 'thin_film', 'perc', 'bifacial', 'hjt', 'ibc']),
     help="Filter by cell type"
@@ -94,7 +114,8 @@ console = Console()
 )
 @click.pass_context
 def search(ctx, manufacturer, model, series, power_min, power_max,
-          efficiency_min, efficiency_max, cell_type, module_type,
+          efficiency_min, efficiency_max, height_min, height_max,
+          width_min, width_max, cell_type, module_type,
           sort_by, sort_order, limit, output, output_format):
     """
     Search for modules in the database.
@@ -135,6 +156,14 @@ def search(ctx, manufacturer, model, series, power_min, power_max,
             criteria['efficiency_min'] = efficiency_min
         if efficiency_max is not None:
             criteria['efficiency_max'] = efficiency_max
+        if height_min is not None:
+            criteria['height_min'] = height_min
+        if height_max is not None:
+            criteria['height_max'] = height_max
+        if width_min is not None:
+            criteria['width_min'] = width_min
+        if width_max is not None:
+            criteria['width_max'] = width_max
         if cell_type:
             criteria['cell_type'] = cell_type
         if module_type:
@@ -154,6 +183,10 @@ def search(ctx, manufacturer, model, series, power_min, power_max,
                 max_power=power_max,
                 min_efficiency=efficiency_min,
                 max_efficiency=efficiency_max,
+                min_height=height_min,
+                max_height=height_max,
+                min_width=width_min,
+                max_width=width_max,
                 cell_type=cell_type,
                 limit=limit
             )

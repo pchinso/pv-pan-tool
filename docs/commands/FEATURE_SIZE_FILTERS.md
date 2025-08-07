@@ -1,8 +1,8 @@
-# Size Filtering Feature Implementation
+# Size Filtering Feature
 
 ## Overview
 
-Added height and width filtering capabilities to the PV PAN Tool export command, allowing users to filter modules by their physical dimensions.
+Added height and width filtering capabilities to the PV PAN Tool `export`, `search`, and `compare` commands, allowing users to filter modules by their physical dimensions.
 
 ## Changes Made
 
@@ -40,6 +40,22 @@ Added height and width filtering capabilities to the PV PAN Tool export command,
 
 - Added examples showing size filtering usage
 - Updated help text for all new options
+
+### 3. Search Command (`src/pv_pan_tool/cli/commands/search.py`)
+
+#### Added new command-line options
+- `--height-min, -h FLOAT` - Minimum height (mm)
+- `--height-max, -H FLOAT` - Maximum height (mm)
+- `--width-min, -w FLOAT` - Minimum width (mm)
+- `--width-max, -W FLOAT` - Maximum width (mm)
+
+### 4. Compare Command (`src/pv_pan_tool/cli/commands/compare.py`)
+
+#### Added new command-line options
+- `--height-min, FLOAT` - Minimum height (mm)
+- `--height-max, FLOAT` - Maximum height (mm)
+- `--width-min, FLOAT` - Minimum width (mm)
+- `--width-max, FLOAT` - Maximum width (mm)
 
 ## Usage Examples
 
@@ -125,12 +141,5 @@ SELECT * FROM pv_modules WHERE
 
 1. `src/pv_pan_tool/database.py` - Updated search_modules method
 2. `src/pv_pan_tool/cli/commands/export.py` - Added size filter options
-
-## Future Enhancements
-
-This implementation provides the foundation for adding size filtering to other commands:
-
-- Search command (`src/pv_pan_tool/cli/commands/search.py`)
-- Compare command (`src/pv_pan_tool/cli/commands/compare.py`)
-
-The same pattern can be applied to these commands by adding the same height/width options and updating their respective search_modules calls.
+3. `src/pv_pan_tool/cli/commands/search.py` - Added size filter options
+4. `src/pv_pan_tool/cli/commands/compare.py` - Added size filter options

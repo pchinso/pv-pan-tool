@@ -18,6 +18,10 @@ pv-pan-tool search [OPTIONS]
 | `-P, --power-max` | FLOAT | Maximum power rating in watts |
 | `-e, --efficiency-min` | FLOAT | Minimum efficiency percentage |
 | `-E, --efficiency-max` | FLOAT | Maximum efficiency percentage |
+| `-h, --height-min` | FLOAT | Minimum height in mm |
+| `-H, --height-max` | FLOAT | Maximum height in mm |
+| `-w, --width-min` | FLOAT | Minimum width in mm |
+| `-W, --width-max` | FLOAT | Maximum width in mm |
 | `-c, --cell-type` | CHOICE | Filter by cell type |
 | `-l, --limit` | INTEGER | Maximum number of results to return |
 | `-s, --sort-by` | CHOICE | Sort results by parameter |
@@ -71,6 +75,12 @@ pv-pan-tool search --cell-type monocrystalline --limit 10 --sort-by efficiency_s
 
 ```bash
 pv-pan-tool search --manufacturer "Jinko,Longi" --power-min 600 --efficiency-min 22 --cell-type bifacial
+```
+
+### Size based filtering
+
+```bash
+pv-pan-tool search --height-max 2000 --width-max 1100
 ```
 
 ### Export search results
