@@ -2,7 +2,7 @@
     "pan_directory": "C:\\Users\\slpcs.ABG\\OneDrive - Cox\\PAN_catalog\\01. Modulos",
     "database_path": "data/database/pv_modules.db",
     "output_directory": "output",
-    "max_files_per_batch": 100,
+    "max_files_per_batch": 1000,
     "default_export_format": "csv",
     "verbose_output": false,
     "auto_backup": true,
@@ -27,4 +27,3 @@
         "excel_sheet_name": "PV_Modules"
     }
 }
-
