@@ -23,21 +23,25 @@ pv-pan-tool parse [OPTIONS]
 ## Examples
 
 ### Basic parsing
+
 ```bash
 pv-pan-tool parse --input-dir "C:\pan_files"
 ```
 
 ### Recursive parsing with progress
+
 ```bash
 pv-pan-tool parse --input-dir "data/pan_files" --recursive --verbose
 ```
 
 ### Force re-parse all files
+
 ```bash
 pv-pan-tool parse --input-dir "data/pan_files" --recursive --force
 ```
 
 ### Clear database and start fresh
+
 ```bash
 pv-pan-tool parse --input-dir "data/pan_files" --clear-db --recursive
 ```
@@ -69,6 +73,7 @@ The command processes each .PAN file and:
 ## File Registry
 
 The parser maintains a registry (`parsed_files_registry.json`) to track:
+
 - Previously processed files
 - File modification times
 - Processing status
@@ -88,6 +93,7 @@ The parser handles various error conditions gracefully:
 ## Performance
 
 Processing performance depends on:
+
 - Number of .PAN files
 - File size and complexity
 - System specifications
@@ -98,14 +104,16 @@ Typical performance: **100-500 files per second** on modern systems.
 ## Supported .PAN Formats
 
 The parser supports various .PAN file formats including:
+
 - **PVsyst format**: Standard industry format
-- **SAM format**: System Advisor Model files  
+- **SAM format**: System Advisor Model files
 - **Custom formats**: Manufacturer-specific variants
 - **Multi-language**: Files with international character sets
 
 ## Database Schema
 
 Parsed data is stored in a normalized SQLite database with tables for:
+
 - **pv_modules**: Main module specifications
 - **manufacturers**: Manufacturer information
 - **parsing_log**: Processing history and metadata

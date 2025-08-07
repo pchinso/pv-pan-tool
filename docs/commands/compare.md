@@ -28,13 +28,17 @@ pv-pan-tool compare [OPTIONS]
 ## Selection Methods
 
 ### By Module IDs
+
 Compare specific modules by database ID:
+
 ```bash
 pv-pan-tool compare --ids 1,5,12,25
 ```
 
 ### By Top Performance
+
 Compare highest performing modules:
+
 ```bash
 # Top 5 by power rating
 pv-pan-tool compare --top-power 5
@@ -44,18 +48,22 @@ pv-pan-tool compare --top-efficiency 3
 ```
 
 ### By Manufacturer
+
 Compare modules from specific manufacturers:
+
 ```bash
 pv-pan-tool compare --manufacturer "Jinko,Longi,Trina" --limit 6
 ```
 
 ### By Ranges
+
 Compare modules within specific parameter ranges:
+
 ```bash
 # Power range 600-700W
 pv-pan-tool compare --power-range 600-700 --limit 5
 
-# Efficiency range 21.5-23%  
+# Efficiency range 21.5-23%
 pv-pan-tool compare --efficiency-range 21.5-23 --limit 4
 
 # Combined ranges
@@ -65,10 +73,11 @@ pv-pan-tool compare --power-range 650-700 --efficiency-range 22-23
 ## Output Formats
 
 ### Table Format (Default)
+
 Side-by-side comparison in a formatted table showing:
 
 ```
-                          Module Comparison                          
+                          Module Comparison
 ┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┓
 ┃                      ┃ JinkoSolar   ┃ JinkoSolar   ┃ JinkoSolar   ┃
 ┃ Parameter            ┃ JKM720N...   ┃ JKM715N...   ┃ JKM710N...   ┃
@@ -81,14 +90,16 @@ Side-by-side comparison in a formatted table showing:
 ```
 
 ### JSON Format
+
 Structured comparison data:
+
 ```json
 {
   "comparison": {
     "modules": [
       {
         "id": 1,
-        "manufacturer": "JinkoSolar", 
+        "manufacturer": "JinkoSolar",
         "model": "JKM720N-72HL4-BDV",
         "specifications": {
           "pmax_stc": 720.0,
@@ -104,6 +115,7 @@ Structured comparison data:
 ```
 
 ### CSV Format
+
 Comparison data in spreadsheet format with modules as columns.
 
 ## Comparison Parameters
@@ -111,20 +123,23 @@ Comparison data in spreadsheet format with modules as columns.
 The comparison includes all key specifications:
 
 **Electrical Parameters:**
+
 - Maximum power (Pmax)
-- Efficiency percentage  
+- Efficiency percentage
 - Open circuit voltage (Voc)
 - Short circuit current (Isc)
 - Voltage at maximum power (Vmp)
 - Current at maximum power (Imp)
 
 **Physical Parameters:**
+
 - Module dimensions (length, width, thickness)
 - Weight
 - Cell configuration
 - Module type (standard, bifacial, etc.)
 
 **Performance Parameters:**
+
 - Temperature coefficients
 - Operating conditions
 - Certification standards
@@ -132,6 +147,7 @@ The comparison includes all key specifications:
 ## Sorting Options
 
 Results can be sorted by any parameter:
+
 - `pmax_stc` - Maximum power (default)
 - `efficiency_stc` - Efficiency
 - `voc_stc` - Open circuit voltage
@@ -145,22 +161,28 @@ pv-pan-tool compare --top-power 5 --sort-by efficiency_stc
 ## Use Case Examples
 
 ### Technology Comparison
+
 Compare different cell technologies:
+
 ```bash
 # Monocrystalline vs bifacial modules
 pv-pan-tool compare --top-power 3 --cell-type monocrystalline
 pv-pan-tool compare --top-power 3 --cell-type bifacial
 ```
 
-### Manufacturer Analysis  
+### Manufacturer Analysis
+
 Compare leading manufacturers:
+
 ```bash
-pv-pan-tool compare --manufacturer "Jinko" --top-power 2 
+pv-pan-tool compare --manufacturer "Jinko" --top-power 2
 pv-pan-tool compare --manufacturer "Longi" --top-power 2
 ```
 
 ### Project Planning
+
 Compare modules for specific project requirements:
+
 ```bash
 # Commercial project: 600W+ modules
 pv-pan-tool compare --power-range 600-750 --limit 5
@@ -170,18 +192,21 @@ pv-pan-tool compare --efficiency-range 21-23 --power-range 350-450
 ```
 
 ### Market Analysis
+
 Analyze market segments:
+
 ```bash
 # Premium segment: highest efficiency
 pv-pan-tool compare --top-efficiency 10
 
-# Value segment: cost-effective options  
+# Value segment: cost-effective options
 pv-pan-tool compare --power-range 400-500 --sort-by price_per_watt
 ```
 
 ## Export and Sharing
 
 ### Save Comparisons
+
 ```bash
 # Save to CSV for spreadsheet analysis
 pv-pan-tool compare --top-power 10 --format csv --output top_modules.csv
@@ -191,8 +216,10 @@ pv-pan-tool compare --manufacturer "Jinko,Longi" --format json --output comparis
 ```
 
 ### Integration with Other Tools
+
 The comparison output can be integrated with:
+
 - Spreadsheet applications (CSV format)
-- Data analysis tools (JSON format)  
+- Data analysis tools (JSON format)
 - Report generation systems
 - Project documentation

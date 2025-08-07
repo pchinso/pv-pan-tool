@@ -11,6 +11,7 @@ pv-pan-tool database [OPTIONS] COMMAND [ARGS]...
 ## Subcommands
 
 ### backup
+
 Create a backup copy of the database:
 
 ```bash
@@ -18,10 +19,12 @@ pv-pan-tool database backup [OPTIONS]
 ```
 
 **Options:**
+
 - `--output PATH` - Backup file location (default: timestamped backup)
 - `--compress` - Create compressed backup file
 
 **Examples:**
+
 ```bash
 # Create timestamped backup
 pv-pan-tool database backup
@@ -34,6 +37,7 @@ pv-pan-tool database backup --compress --output backup.db.gz
 ```
 
 ### restore
+
 Restore database from a backup file:
 
 ```bash
@@ -41,10 +45,12 @@ pv-pan-tool database restore [OPTIONS] BACKUP_FILE
 ```
 
 **Options:**
+
 - `--confirm` - Skip confirmation prompt
 - `--preserve-current` - Backup current database before restore
 
 **Examples:**
+
 ```bash
 # Restore from backup
 pv-pan-tool database restore backup_20250106.db
@@ -54,6 +60,7 @@ pv-pan-tool database restore --confirm backup.db
 ```
 
 ### clear
+
 Remove all data from the database:
 
 ```bash
@@ -61,10 +68,12 @@ pv-pan-tool database clear [OPTIONS]
 ```
 
 **Options:**
+
 - `--confirm` - Skip confirmation prompt
 - `--backup-first` - Create backup before clearing
 
 **Examples:**
+
 ```bash
 # Clear with confirmation
 pv-pan-tool database clear
@@ -74,6 +83,7 @@ pv-pan-tool database clear --backup-first
 ```
 
 ### info
+
 Display detailed database information:
 
 ```bash
@@ -81,6 +91,7 @@ pv-pan-tool database info
 ```
 
 Shows:
+
 - Database file path and size
 - Last modification time
 - Total modules and manufacturers
@@ -88,6 +99,7 @@ Shows:
 - Index information
 
 ### check
+
 Perform database integrity checks:
 
 ```bash
@@ -95,10 +107,12 @@ pv-pan-tool database check [OPTIONS]
 ```
 
 **Options:**
+
 - `--full` - Perform comprehensive integrity check
 - `--repair` - Attempt to repair detected issues
 
 **Examples:**
+
 ```bash
 # Quick integrity check
 pv-pan-tool database check
@@ -108,6 +122,7 @@ pv-pan-tool database check --full --repair
 ```
 
 ### optimize
+
 Optimize database performance:
 
 ```bash
@@ -115,11 +130,13 @@ pv-pan-tool database optimize [OPTIONS]
 ```
 
 **Options:**
+
 - `--vacuum` - Reclaim unused space
 - `--reindex` - Rebuild all indexes
 - `--analyze` - Update query statistics
 
 **Examples:**
+
 ```bash
 # Standard optimization
 pv-pan-tool database optimize
@@ -131,6 +148,7 @@ pv-pan-tool database optimize --vacuum --reindex --analyze
 ## Backup Strategy
 
 ### Automated Backups
+
 Set up regular backups for data protection:
 
 ```bash
@@ -142,30 +160,37 @@ pv-pan-tool database backup --compress --output backups/weekly_$(date +%Y%m%d).d
 ```
 
 ### Backup Retention
+
 Implement backup retention policies:
+
 - Keep daily backups for 30 days
-- Keep weekly backups for 12 weeks  
+- Keep weekly backups for 12 weeks
 - Keep monthly backups for 12 months
 
 ## Maintenance Tasks
 
 ### Regular Maintenance
+
 Recommended maintenance schedule:
 
 **Daily:**
+
 - Automatic backup after parse operations
 - Quick integrity check
 
-**Weekly:**  
+**Weekly:**
+
 - Database optimization
 - Index rebuild if needed
 
 **Monthly:**
+
 - Full integrity check
 - Vacuum database
 - Update statistics
 
 ### Performance Optimization
+
 For large databases (>10,000 modules):
 
 ```bash
@@ -174,6 +199,7 @@ pv-pan-tool database optimize --vacuum --reindex --analyze
 ```
 
 ### Storage Management
+
 Monitor database size and clean up:
 
 ```bash
@@ -187,14 +213,17 @@ pv-pan-tool database optimize --vacuum
 ## Migration and Upgrades
 
 ### Schema Migration
+
 When upgrading the tool:
 
 1. **Backup current database:**
+
    ```bash
    pv-pan-tool database backup --output pre_upgrade_backup.db
    ```
 
 2. **Check compatibility:**
+
    ```bash
    pv-pan-tool database check --full
    ```
@@ -203,9 +232,11 @@ When upgrading the tool:
    Follow upgrade instructions for your version
 
 ### Data Migration
+
 Moving data between systems:
 
 1. **Export from source:**
+
    ```bash
    pv-pan-tool export --format json --include-details --output full_export.json
    ```
@@ -216,6 +247,7 @@ Moving data between systems:
    - Configuration files
 
 3. **Import to destination:**
+
    ```bash
    pv-pan-tool database restore backup.db
    # or parse original .PAN files
@@ -224,6 +256,7 @@ Moving data between systems:
 ## Troubleshooting
 
 ### Database Corruption
+
 If database appears corrupted:
 
 ```bash
@@ -238,6 +271,7 @@ pv-pan-tool database restore latest_backup.db
 ```
 
 ### Performance Issues
+
 For slow database operations:
 
 ```bash
@@ -249,6 +283,7 @@ pv-pan-tool database info
 ```
 
 ### Disk Space Issues
+
 When running low on disk space:
 
 ```bash
@@ -262,12 +297,14 @@ pv-pan-tool database info
 ## Security Considerations
 
 ### Backup Security
+
 - Store backups in secure locations
 - Encrypt sensitive backup files
 - Control access to backup directories
 - Test restore procedures regularly
 
 ### Database Access
+
 - Protect database file permissions
 - Use secure paths for database location
 - Monitor database access logs

@@ -23,6 +23,7 @@ pv-pan-tool stats [OPTIONS]
 ## Statistical Reports
 
 ### Overall Database Statistics
+
 Basic overview of the entire database:
 
 ```bash
@@ -30,8 +31,9 @@ pv-pan-tool stats
 ```
 
 Shows:
+
 - Total number of modules
-- Total number of manufacturers  
+- Total number of manufacturers
 - Power range (minimum to maximum)
 - Efficiency range (minimum to maximum)
 - Average specifications across all modules
@@ -43,6 +45,7 @@ pv-pan-tool stats --by-manufacturer
 ```
 
 Provides per-manufacturer statistics:
+
 - Number of module models
 - Average power output
 - Average efficiency rating
@@ -56,6 +59,7 @@ pv-pan-tool stats --by-cell-type
 ```
 
 Breaks down statistics by cell technology:
+
 - Module count per technology type
 - Average specifications by technology
 - Performance characteristics comparison
@@ -68,14 +72,16 @@ pv-pan-tool stats --by-power-range
 ```
 
 Categorizes modules into power ranges:
+
 - Residential (< 400W)
-- Commercial (400-600W)  
+- Commercial (400-600W)
 - Utility (> 600W)
 - Distribution within each category
 
 ## Example Outputs
 
 ### Overall Statistics
+
 ```
 ╭─────────────────── Database Statistics ────────────────────╮
 │ Total Modules: 61                                          │
@@ -90,13 +96,14 @@ Categorizes modules into power ranges:
 ```
 
 ### Manufacturer Statistics
+
 ```
 Manufacturer Statistics
 ┏━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┓
 ┃ Manufacturer   ┃ Module Count ┃ Avg Power    ┃ Avg Efficiency ┃
 ┡━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━┩
 │ JinkoSolar     │ 35           │ 650.2W       │ 22.6%          │
-│ LONGi          │ 18           │ 625.8W       │ 22.1%          │  
+│ LONGi          │ 18           │ 625.8W       │ 22.1%          │
 │ Trina Solar    │ 8            │ 670.5W       │ 22.8%          │
 └────────────────┴──────────────┴──────────────┴────────────────┘
 ```
@@ -104,21 +111,27 @@ Manufacturer Statistics
 ## Analysis Features
 
 ### Trend Analysis
+
 Identify market trends and patterns:
+
 - Technology adoption rates
-- Power output evolution  
+- Power output evolution
 - Efficiency improvements over time
 - Manufacturer market positioning
 
 ### Performance Benchmarking
+
 Compare performance across categories:
+
 - Best-in-class efficiency by power range
 - Technology performance comparison
 - Manufacturer performance ranking
 - Price-performance analysis (when price data available)
 
 ### Market Intelligence
+
 Understand market dynamics:
+
 - Market share by manufacturer
 - Technology distribution
 - Product portfolio analysis
@@ -127,16 +140,19 @@ Understand market dynamics:
 ## Export and Reporting
 
 ### Save Statistics
+
 ```bash
 # Export to CSV for spreadsheet analysis
 pv-pan-tool stats --by-manufacturer --format csv --output manufacturer_stats.csv
 
-# Export to JSON for programmatic use  
+# Export to JSON for programmatic use
 pv-pan-tool stats --format json --output database_stats.json
 ```
 
 ### Integration with Analysis Tools
+
 Statistics can be exported for use with:
+
 - Business intelligence platforms
 - Data visualization tools
 - Market research reports
@@ -146,21 +162,25 @@ Statistics can be exported for use with:
 ## Use Cases
 
 ### Market Research
+
 ```bash
 pv-pan-tool stats --by-manufacturer --sort-by efficiency --limit 10
 ```
 
 ### Technology Assessment
+
 ```bash
 pv-pan-tool stats --by-cell-type --format json --output tech_analysis.json
 ```
 
 ### Competitive Analysis
+
 ```bash
 pv-pan-tool stats --by-manufacturer --sort-by count --output market_share.csv
 ```
 
 ### Product Planning
+
 ```bash
 pv-pan-tool stats --by-power-range --format table
 ```

@@ -33,10 +33,13 @@ pv-pan-tool export --format csv --output modules.csv
 
 1. Clone the repository
 2. Install dependencies with Poetry:
+
    ```bash
    poetry install
    ```
+
 3. Activate the virtual environment:
+
    ```bash
    poetry shell
    ```
@@ -58,21 +61,25 @@ The tool provides several commands, each with comprehensive options:
 ### Basic Workflow
 
 1. **Import Data**: Start by parsing your .PAN files
+
    ```bash
    pv-pan-tool parse --input-dir "data/pan_files" --recursive
    ```
 
 2. **Search Modules**: Find modules matching your criteria
+
    ```bash
    pv-pan-tool search --manufacturer "Jinko" --power-min 600 --efficiency-min 21.5
    ```
 
 3. **Compare Options**: Compare your shortlisted modules
+
    ```bash
    pv-pan-tool compare --ids 1,5,12 --format table
    ```
 
 4. **Export Results**: Save your analysis
+
    ```bash
    pv-pan-tool export --manufacturer "Jinko,Longi" --format csv --output comparison.csv
    ```
@@ -80,16 +87,19 @@ The tool provides several commands, each with comprehensive options:
 ### Advanced Usage
 
 **Find the most efficient modules by manufacturer:**
+
 ```bash
 pv-pan-tool stats --by-manufacturer --sort-by efficiency
 ```
 
 **Compare modules in specific power and efficiency ranges:**
+
 ```bash
 pv-pan-tool compare --power-range 650-700 --efficiency-range 22-23 --limit 5
 ```
 
 **Export all monocrystalline modules with detailed specifications:**
+
 ```bash
 pv-pan-tool export --cell-type monocrystalline --format json --include-details --output mono_modules.json
 ```
@@ -97,6 +107,7 @@ pv-pan-tool export --cell-type monocrystalline --format json --include-details -
 ## Configuration
 
 The tool can be configured via:
+
 - Command-line options
 - Configuration file (config.yaml)
 - Environment variables
