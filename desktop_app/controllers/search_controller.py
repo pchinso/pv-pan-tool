@@ -103,17 +103,25 @@ class SearchController:
         if search_params.get("module_type"):
             criteria["module_type"] = search_params["module_type"]
 
-        # Size (height/width)
-        if search_params.get("min_height") is not None:
+        # Size (height/width) — support both new and legacy param names
+        if search_params.get("height_min") is not None:
+            criteria["height_min"] = search_params["height_min"]
+        elif search_params.get("min_height") is not None:
             criteria["height_min"] = search_params["min_height"]
 
-        if search_params.get("max_height") is not None:
+        if search_params.get("height_max") is not None:
+            criteria["height_max"] = search_params["height_max"]
+        elif search_params.get("max_height") is not None:
             criteria["height_max"] = search_params["max_height"]
 
-        if search_params.get("min_width") is not None:
+        if search_params.get("width_min") is not None:
+            criteria["width_min"] = search_params["width_min"]
+        elif search_params.get("min_width") is not None:
             criteria["width_min"] = search_params["min_width"]
 
-        if search_params.get("max_width") is not None:
+        if search_params.get("width_max") is not None:
+            criteria["width_max"] = search_params["width_max"]
+        elif search_params.get("max_width") is not None:
             criteria["width_max"] = search_params["max_width"]
 
         # Sorting
@@ -174,7 +182,8 @@ class SearchController:
                 "cell_types": self.db_controller.get_cell_types(),
                 "module_types": self.db_controller.get_module_types(),
                 "power_range": self.db_controller.get_power_range(),
-                "efficiency_range": self.db_controller.get_efficiency_range()
+                "efficiency_range": self.db_controller.get_efficiency_range(),
+                "size_range": self.db_controller.get_size_range(),
             }
         except Exception as e:
             print(f"Error getting filter options: {e}")
@@ -358,7 +367,8 @@ class SearchController:
         return popular
 
     def export_search_results(self, modules: List[Dict[str, Any]],
-                            format: str = "csv") -> Optional[str]:
+                              file_path: Optional[str] = None,
+                              format: Optional[str] = None) -> Optional[str]:
         """
         Export search results to file.
 
@@ -370,43 +380,49 @@ class SearchController:
             Path to exported file or None if failed
         """
         try:
-            import os
-            import tempfile
+            import csv
+            import json
             from datetime import datetime
+            from pathlib import Path
 
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # Determine project root and default export directory
+            # This file lives in desktop_app/controllers, so project_root is parents[2]
+            project_root = Path(__file__).resolve().parents[2]
+            export_dir = project_root / 'data' / 'exports'
+            export_dir.mkdir(parents=True, exist_ok=True)
 
-            if format == "csv":
-                import csv
+            # Decide target path and format
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            if file_path:
+                target_path = Path(file_path)
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                ext = target_path.suffix.lower().lstrip('.')
+                fmt = ext or (format or 'csv')
+            else:
+                fmt = (format or 'csv').lower()
+                default_name = f'search_results_{timestamp}.{fmt}'
+                target_path = export_dir / default_name
 
-                temp_file = tempfile.NamedTemporaryFile(
-                    mode='w',
-                    suffix=f'_search_results_{timestamp}.csv',
-                    delete=False
-                )
+            if fmt == 'csv':
+                # Write CSV
+                with target_path.open('w', newline='', encoding='utf-8') as f:
+                    if modules:
+                        # Use keys from first record
+                        fieldnames = list(modules[0].keys())
+                        writer = csv.DictWriter(f, fieldnames=fieldnames)
+                        writer.writeheader()
+                        writer.writerows(modules)
+                    else:
+                        # Write empty CSV with no rows
+                        f.write('')
+                return str(target_path)
 
-                if modules:
-                    fieldnames = modules[0].keys()
-                    writer = csv.DictWriter(temp_file, fieldnames=fieldnames)
-                    writer.writeheader()
-                    writer.writerows(modules)
+            if fmt == 'json':
+                with target_path.open('w', encoding='utf-8') as f:
+                    json.dump(modules, f, indent=2, default=str)
+                return str(target_path)
 
-                temp_file.close()
-                return temp_file.name
-
-            elif format == "json":
-                import json
-
-                temp_file = tempfile.NamedTemporaryFile(
-                    mode='w',
-                    suffix=f'_search_results_{timestamp}.json',
-                    delete=False
-                )
-
-                json.dump(modules, temp_file, indent=2, default=str)
-                temp_file.close()
-                return temp_file.name
-
+            # Unsupported format for now
             return None
 
         except Exception as e:

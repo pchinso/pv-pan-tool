@@ -230,6 +230,32 @@ class MainWindow(QMainWindow):
         
         # Connect tab change signal
         self.tab_widget.currentChanged.connect(self.on_tab_changed)
+        
+        # Setup widget connections
+        self.setup_widget_connections()
+    
+    def setup_widget_connections(self):
+        """Setup connections between widgets."""
+        # Connect search widget to compare widget
+        self.search_widget.modules_selected.connect(self.on_modules_selected_for_comparison)
+        
+        # Connect compare widget changes
+        self.compare_widget.modules_changed.connect(self.on_comparison_modules_changed)
+    
+    def on_modules_selected_for_comparison(self, modules):
+        """Handle modules selected for comparison from search."""
+        if len(modules) >= 2:
+            # Add modules to comparison
+            for module in modules:
+                self.compare_widget.add_module_to_comparison(module)
+            
+            # Switch to compare tab
+            self.tab_widget.setCurrentIndex(2)  # Compare tab index
+    
+    def on_comparison_modules_changed(self, modules):
+        """Handle changes in comparison modules."""
+        # Update header stats or other UI elements if needed
+        pass
     
     def create_dashboard_widget(self):
         """Create the dashboard widget."""

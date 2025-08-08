@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QFont, QIcon
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 # Add the src directory to the Python path
@@ -19,13 +19,14 @@ src_dir = current_dir.parent / "src"
 sys.path.insert(0, str(src_dir))
 
 try:
+    # Try to import the modules, but don't fail if they're not available
     from pv_pan_tool.database import PVModuleDatabase
     from pv_pan_tool.models import PVModule
-    from pv_pan_tool.parser import PANFileParser
+    MODULES_AVAILABLE = True
 except ImportError as e:
-    print(f"Error importing modules: {e}")
-    print("Make sure the src directory is in the Python path")
-    sys.exit(1)
+    print(f"Warning: Some modules not available: {e}")
+    print("The application will run with limited functionality")
+    MODULES_AVAILABLE = False
 
 from ui.main_window import MainWindow
 
@@ -52,6 +53,13 @@ class PVPanToolApp(QApplication):
 
         # Apply dark theme
         self.apply_dark_theme()
+
+        # Set a safe default font on Windows to avoid DirectWrite warnings
+        try:
+            if sys.platform.startswith('win'):
+                self.setFont(QFont("Segoe UI", 9))
+        except Exception:
+            pass
 
         # Initialize main window
         self.main_window = None
@@ -231,8 +239,6 @@ class PVPanToolApp(QApplication):
 
 def main():
     """Main entry point."""
-    # High DPI is enabled by default in Qt6; no attributes needed.
-
     # Create application
     app = PVPanToolApp(sys.argv)
 

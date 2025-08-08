@@ -140,6 +140,13 @@ class PVModuleDatabase:
             cursor.execute("SELECT COUNT(*) FROM pv_modules WHERE unique_id = ?", (unique_id,))
             return cursor.fetchone()[0] > 0
 
+    def is_file_processed(self, file_path: str) -> bool:
+        """Return True if a module with the given file path already exists in DB."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM pv_modules WHERE file_path = ?", (str(file_path),))
+            return cursor.fetchone()[0] > 0
+
     def get_module_id_by_unique_id(self, unique_id: str) -> Optional[int]:
         """Get the database ID of a module by its unique_id."""
         with sqlite3.connect(self.db_path) as conn:
@@ -400,10 +407,13 @@ class PVModuleDatabase:
                       min_efficiency: Optional[float] = None,
                       max_efficiency: Optional[float] = None,
                       cell_type: Optional[str] = None,
+                      module_type: Optional[str] = None,
                       min_height: Optional[float] = None,
                       max_height: Optional[float] = None,
                       min_width: Optional[float] = None,
                       max_width: Optional[float] = None,
+                      sort_by: Optional[str] = None,
+                      sort_order: str = "desc",
                       limit: Optional[int] = None) -> List[Dict]:
         """
         Search modules with various filters.
@@ -460,6 +470,10 @@ class PVModuleDatabase:
                 query += " AND cell_type = ?"
                 params.append(cell_type)
 
+            if module_type:
+                query += " AND module_type = ?"
+                params.append(module_type)
+
             if min_height is not None:
                 query += " AND height >= ?"
                 params.append(min_height)
@@ -476,7 +490,16 @@ class PVModuleDatabase:
                 query += " AND width <= ?"
                 params.append(max_width)
 
-            query += " ORDER BY pmax_stc DESC"
+            # Sorting (whitelist to avoid SQL injection)
+            allowed_sort = {
+                "pmax_stc", "efficiency_stc", "voc_stc", "isc_stc",
+                "vmp_stc", "imp_stc", "manufacturer", "model"
+            }
+            if sort_by in allowed_sort:
+                order = "DESC" if str(sort_order).lower() == "desc" else "ASC"
+                query += f" ORDER BY {sort_by} {order}"
+            else:
+                query += " ORDER BY pmax_stc DESC"
 
             if limit:
                 query += " LIMIT ?"
@@ -490,6 +513,20 @@ class PVModuleDatabase:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT DISTINCT manufacturer FROM pv_modules ORDER BY manufacturer")
+            return [row[0] for row in cursor.fetchall()]
+
+    def get_cell_types(self) -> List[str]:
+        """Get list of all cell types in the database."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT cell_type FROM pv_modules WHERE cell_type IS NOT NULL ORDER BY cell_type")
+            return [row[0] for row in cursor.fetchall()]
+
+    def get_module_types(self) -> List[str]:
+        """Get list of all module types in the database."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT module_type FROM pv_modules WHERE module_type IS NOT NULL ORDER BY module_type")
             return [row[0] for row in cursor.fetchall()]
 
     def get_models_by_manufacturer(self, manufacturer: str) -> List[str]:
@@ -546,17 +583,174 @@ class PVModuleDatabase:
             """)
             cell_types = dict(cursor.fetchall())
 
+            # Models count (distinct models across manufacturers)
+            cursor.execute("SELECT COUNT(DISTINCT model) FROM pv_modules")
+            total_models = cursor.fetchone()[0]
+
+            # Build backward-compatible structure
+            min_power = float(power_stats[0]) if power_stats and power_stats[0] is not None else 0.0
+            max_power = float(power_stats[1]) if power_stats and power_stats[1] is not None else 0.0
+            avg_power = float(power_stats[2]) if power_stats and power_stats[2] is not None else 0.0
+            min_eff = float(efficiency_stats[0]) if efficiency_stats and efficiency_stats[0] is not None else 0.0
+            max_eff = float(efficiency_stats[1]) if efficiency_stats and efficiency_stats[1] is not None else 0.0
+            avg_eff = float(efficiency_stats[2]) if efficiency_stats and efficiency_stats[2] is not None else 0.0
+
             return {
                 "total_modules": total_modules,
                 "total_manufacturers": total_manufacturers,
-                "min_power": power_stats[0] if power_stats[0] else 0,
-                "max_power": power_stats[1] if power_stats[1] else 0,
-                "avg_power": power_stats[2] if power_stats[2] else 0,
-                "min_efficiency": efficiency_stats[0] if efficiency_stats[0] else 0,
-                "max_efficiency": efficiency_stats[1] if efficiency_stats[1] else 0,
-                "avg_efficiency": efficiency_stats[2] if efficiency_stats[2] else 0,
-                "cell_type_distribution": cell_types
+                "total_models": total_models,
+                # flat stats
+                "min_power": min_power,
+                "max_power": max_power,
+                "avg_power": avg_power,
+                "min_efficiency": min_eff,
+                "max_efficiency": max_eff,
+                "avg_efficiency": avg_eff,
+                # nested ranges for CLI/UI compatibility
+                "power_range": {"min": min_power, "max": max_power, "avg": avg_power},
+                "efficiency_range": {"min": min_eff, "max": max_eff, "avg": avg_eff},
+                # distributions
+                "cell_type_distribution": cell_types,
             }
+
+    def get_cell_type_statistics(self) -> List[Dict[str, Any]]:
+        """Aggregate statistics grouped by cell type."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT
+                    cell_type,
+                    COUNT(*) as count,
+                    AVG(pmax_stc) as avg_power,
+                    AVG(efficiency_stc) as avg_efficiency
+                FROM pv_modules
+                WHERE cell_type IS NOT NULL
+                GROUP BY cell_type
+                ORDER BY count DESC
+                """
+            )
+            rows = cursor.fetchall()
+            return [
+                {
+                    "cell_type": row[0] or "unknown",
+                    "count": row[1] or 0,
+                    "avg_power": round(row[2], 1) if row[2] else 0,
+                    "avg_efficiency": round(row[3], 2) if row[3] else 0,
+                }
+                for row in rows
+            ]
+
+    def get_module_type_statistics(self) -> List[Dict[str, Any]]:
+        """Aggregate statistics grouped by module type."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT
+                    module_type,
+                    COUNT(*) as count,
+                    AVG(pmax_stc) as avg_power,
+                    AVG(efficiency_stc) as avg_efficiency
+                FROM pv_modules
+                WHERE module_type IS NOT NULL
+                GROUP BY module_type
+                ORDER BY count DESC
+                """
+            )
+            rows = cursor.fetchall()
+            return [
+                {
+                    "module_type": row[0] or "unknown",
+                    "count": row[1] or 0,
+                    "avg_power": round(row[2], 1) if row[2] else 0,
+                    "avg_efficiency": round(row[3], 2) if row[3] else 0,
+                }
+                for row in rows
+            ]
+
+    def get_power_range_distribution(self, bin_size: Optional[float] = None) -> List[Dict[str, Any]]:
+        """Return distribution of modules across power ranges."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT MIN(pmax_stc), MAX(pmax_stc) FROM pv_modules WHERE pmax_stc IS NOT NULL")
+            row = cursor.fetchone()
+            if not row or row[0] is None or row[1] is None:
+                return []
+
+            min_power, max_power = float(row[0]), float(row[1])
+            span = max_power - min_power
+            if span <= 0:
+                return []
+
+            # Choose a reasonable bin size
+            if bin_size is None:
+                if span <= 500:
+                    bin_size = 50
+                elif span <= 1000:
+                    bin_size = 100
+                else:
+                    bin_size = 200
+
+            # Build bins
+            start = int(min_power // bin_size * bin_size)
+            end = int((max_power // bin_size + 1) * bin_size)
+            bins = []
+            for bmin in range(start, end, int(bin_size)):
+                bins.append({"min_power": bmin, "max_power": bmin + bin_size, "count": 0})
+
+            # Fetch all powers and bin in Python for simplicity
+            cursor.execute("SELECT pmax_stc FROM pv_modules WHERE pmax_stc IS NOT NULL")
+            powers = [float(r[0]) for r in cursor.fetchall()]
+            for p in powers:
+                idx = int((p - start) // bin_size)
+                if 0 <= idx < len(bins):
+                    bins[idx]["count"] += 1
+
+            return bins
+
+    def get_efficiency_range_distribution(self, bin_size: Optional[float] = None) -> List[Dict[str, Any]]:
+        """Return distribution of modules across efficiency ranges."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT MIN(efficiency_stc), MAX(efficiency_stc) FROM pv_modules WHERE efficiency_stc IS NOT NULL")
+            row = cursor.fetchone()
+            if not row or row[0] is None or row[1] is None:
+                return []
+
+            min_eff, max_eff = float(row[0]), float(row[1])
+            span = max_eff - min_eff
+            if span <= 0:
+                return []
+
+            # Choose reasonable bin size in percentage points
+            if bin_size is None:
+                if span <= 5:
+                    bin_size = 0.25
+                elif span <= 10:
+                    bin_size = 0.5
+                else:
+                    bin_size = 1.0
+
+            # Build bins
+            import math
+            start = math.floor(min_eff / bin_size) * bin_size
+            end = math.ceil(max_eff / bin_size) * bin_size
+            bins = []
+            current = start
+            while current < end:
+                bins.append({"min_efficiency": current, "max_efficiency": current + bin_size, "count": 0})
+                current += bin_size
+
+            # Fetch all efficiencies and bin
+            cursor.execute("SELECT efficiency_stc FROM pv_modules WHERE efficiency_stc IS NOT NULL")
+            effs = [float(r[0]) for r in cursor.fetchall()]
+            for e in effs:
+                idx = int((e - start) // bin_size)
+                if 0 <= idx < len(bins):
+                    bins[idx]["count"] += 1
+
+            return bins
 
     def get_manufacturer_statistics(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get statistics grouped by manufacturer."""
@@ -595,6 +789,21 @@ class PVModuleDatabase:
                 }
                 for row in results
             ]
+
+    # --- New helpers for raw values (for box plots and advanced charts) ---
+    def get_all_powers(self) -> List[float]:
+        """Return a list of all module Pmax (W) values available."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT pmax_stc FROM pv_modules WHERE pmax_stc IS NOT NULL")
+            return [float(r[0]) for r in cursor.fetchall() if r[0] is not None]
+
+    def get_all_efficiencies(self) -> List[float]:
+        """Return a list of all module efficiency (%) values available."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT efficiency_stc FROM pv_modules WHERE efficiency_stc IS NOT NULL")
+            return [float(r[0]) for r in cursor.fetchall() if r[0] is not None]
 
     def export_to_csv(self, output_file: str, filters: Optional[Dict] = None) -> int:
         """
@@ -646,6 +855,27 @@ class PVModuleDatabase:
                 modules.append(module)
 
         return modules
+
+    def get_size_range(self) -> Dict[str, float]:
+        """Get min/max ranges for height and width in mm."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT MIN(height), MAX(height), MIN(width), MAX(width)
+                FROM pv_modules
+                WHERE height IS NOT NULL AND width IS NOT NULL
+                """
+            )
+            row = cursor.fetchone()
+            if not row:
+                return {"height_min": 0, "height_max": 0, "width_min": 0, "width_max": 0}
+            return {
+                "height_min": float(row[0]) if row[0] is not None else 0,
+                "height_max": float(row[1]) if row[1] is not None else 0,
+                "width_min": float(row[2]) if row[2] is not None else 0,
+                "width_max": float(row[3]) if row[3] is not None else 0,
+            }
 
     def bulk_insert_from_parser_results(self, results: Dict[str, ParsingResult], update_existing: bool = True) -> Dict[str, int]:
         """
@@ -718,3 +948,143 @@ class PVModuleDatabase:
 
         # Reinitialize with new schema
         self.init_database()
+
+    # --- Maintenance and utility operations expected by CLI/Desktop ---
+    def vacuum_database(self) -> None:
+        """Run VACUUM to rebuild the database file and reclaim space."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("VACUUM")
+            conn.commit()
+
+    def analyze_database(self) -> None:
+        """Run ANALYZE to update SQLite statistics."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("ANALYZE")
+            conn.commit()
+
+    def rebuild_indexes(self) -> None:
+        """Rebuild indexes (REINDEX)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("REINDEX")
+            conn.commit()
+
+    def check_integrity(self) -> Dict[str, Any]:
+        """Run PRAGMA integrity_check and return results."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA integrity_check")
+                rows = cursor.fetchall()
+                errors = [r[0] for r in rows if r and r[0] != "ok"]
+                return {"ok": len(errors) == 0, "errors": errors}
+        except Exception as e:
+            return {"ok": False, "errors": [str(e)]}
+
+    def get_table_info(self) -> List[Dict[str, Any]]:
+        """Return basic table info: name and row counts.
+
+        Note: SQLite doesn't provide per-table size easily; size_bytes will be 0.
+        """
+        info: List[Dict[str, Any]] = []
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+            tables = [r[0] for r in cursor.fetchall()]
+            for t in tables:
+                try:
+                    cursor.execute(f"SELECT COUNT(*) FROM {t}")
+                    count = int(cursor.fetchone()[0])
+                except Exception:
+                    count = 0
+                info.append({"name": t, "row_count": count, "size_bytes": 0})
+        return info
+
+    def get_raw_pan_data(self, module_id: int) -> Dict[str, Any]:
+        """Return raw .PAN key/value data for a given module id."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT parameter_name, parameter_value FROM raw_pan_data WHERE module_id = ?",
+                (module_id,),
+            )
+            rows = cursor.fetchall()
+            return {name: value for name, value in rows}
+
+    def find_orphaned_records(self) -> List[Dict[str, Any]]:
+        """Find records in auxiliary tables that reference non-existent modules."""
+        issues: List[Dict[str, Any]] = []
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            # Certifications orphans
+            cursor.execute(
+                """
+                SELECT c.id, c.module_id FROM certifications c
+                LEFT JOIN pv_modules m ON m.id = c.module_id
+                WHERE m.id IS NULL
+                """
+            )
+            for cid, mid in cursor.fetchall():
+                issues.append({"table": "certifications", "id": cid, "module_id": mid})
+
+            # Raw PAN orphans
+            cursor.execute(
+                """
+                SELECT r.id, r.module_id FROM raw_pan_data r
+                LEFT JOIN pv_modules m ON m.id = r.module_id
+                WHERE m.id IS NULL
+                """
+            )
+            for rid, mid in cursor.fetchall():
+                issues.append({"table": "raw_pan_data", "id": rid, "module_id": mid})
+        return issues
+
+    def get_technology_statistics(self) -> Dict[str, Any]:
+        """Return simple technology statistics for CLI/UI usage."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+
+            # Most common cell type
+            cursor.execute(
+                """
+                SELECT cell_type, COUNT(*) as cnt
+                FROM pv_modules
+                WHERE cell_type IS NOT NULL
+                GROUP BY cell_type
+                ORDER BY cnt DESC
+                LIMIT 1
+                """
+            )
+            row = cursor.fetchone()
+            most_common_cell_type = row[0] if row else None
+
+            # Most common module type
+            cursor.execute(
+                """
+                SELECT module_type, COUNT(*) as cnt
+                FROM pv_modules
+                WHERE module_type IS NOT NULL
+                GROUP BY module_type
+                ORDER BY cnt DESC
+                LIMIT 1
+                """
+            )
+            row = cursor.fetchone()
+            most_common_module_type = row[0] if row else None
+
+            # Averages
+            cursor.execute(
+                "SELECT AVG(area_m2), AVG(power_density) FROM pv_modules WHERE area_m2 IS NOT NULL"
+            )
+            row = cursor.fetchone()
+            avg_area = float(row[0]) if row and row[0] is not None else 0.0
+            avg_power_density = float(row[1]) if row and row[1] is not None else 0.0
+
+            return {
+                "most_common_cell_type": most_common_cell_type or "unknown",
+                "most_common_module_type": most_common_module_type or "unknown",
+                "avg_area": avg_area,
+                "avg_power_density": avg_power_density,
+            }

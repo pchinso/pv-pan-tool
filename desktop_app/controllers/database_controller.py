@@ -37,9 +37,16 @@ class DatabaseController:
 
         self.db_path = str(db_path)
         self.database = PVModuleDatabase(self.db_path)
-        # Instantiate the parser correctly; base_directory points to data/pan_files
-        base_dir = Path(__file__).parent.parent.parent / "data" / "pan_files"
-        self.parser = PANFileParser(str(base_dir))
+
+        # Initialize PANFileParser with a sensible default base directory
+        # Default to the repository's data/pan_files directory
+        try:
+            project_root = Path(__file__).parent.parent.parent
+            default_pan_dir = project_root / "data" / "pan_files"
+            self.parser = PANFileParser(str(default_pan_dir))
+        except Exception:
+            # Fallback to current working directory if something goes wrong
+            self.parser = PANFileParser(str(Path.cwd()))
 
     def get_basic_statistics(self) -> Dict[str, Any]:
         """
@@ -84,6 +91,10 @@ class DatabaseController:
             efficiency_ranges = self.database.get_efficiency_range_distribution()
             stats["efficiency_range_distribution"] = efficiency_ranges
 
+            # Add raw lists for box plots
+            stats["power_values"] = self.database.get_all_powers()
+            stats["efficiency_values"] = self.database.get_all_efficiencies()
+
             return stats
 
         except Exception as e:
@@ -100,20 +111,24 @@ class DatabaseController:
             List of matching modules
         """
         try:
-            return self.database.search_modules(
-                manufacturer=criteria.get("manufacturer"),
-                model=criteria.get("model"),
-                min_power=criteria.get("power_min"),
-                max_power=criteria.get("power_max"),
-                min_efficiency=criteria.get("efficiency_min"),
-                max_efficiency=criteria.get("efficiency_max"),
-                cell_type=criteria.get("cell_type"),
-                min_height=criteria.get("height_min") or criteria.get("min_height"),
-                max_height=criteria.get("height_max") or criteria.get("max_height"),
-                min_width=criteria.get("width_min") or criteria.get("min_width"),
-                max_width=criteria.get("width_max") or criteria.get("max_width"),
-                limit=criteria.get("limit", 100),
-            )
+            params = {
+                "manufacturer": criteria.get("manufacturer"),
+                "model": criteria.get("model"),
+                "min_power": criteria.get("power_min"),
+                "max_power": criteria.get("power_max"),
+                "min_efficiency": criteria.get("efficiency_min"),
+                "max_efficiency": criteria.get("efficiency_max"),
+                "cell_type": criteria.get("cell_type"),
+                "module_type": criteria.get("module_type"),
+                "min_height": criteria.get("height_min"),
+                "max_height": criteria.get("height_max"),
+                "min_width": criteria.get("width_min"),
+                "max_width": criteria.get("width_max"),
+                "sort_by": criteria.get("sort_by", "pmax_stc"),
+                "sort_order": criteria.get("sort_order", "desc"),
+                "limit": criteria.get("limit", 100),
+            }
+            return self.database.search_modules(**params)
         except Exception as e:
             print(f"Error searching modules: {e}")
             return []
@@ -215,7 +230,11 @@ class DatabaseController:
         """
         try:
             stats = self.database.get_statistics()
-            return stats.get("power_range", {"min": 0, "max": 0})
+            return {
+                "min": stats.get("min_power", 0),
+                "max": stats.get("max_power", 0),
+                "avg": stats.get("avg_power", 0),
+            }
         except Exception as e:
             print(f"Error getting power range: {e}")
             return {"min": 0, "max": 0}
@@ -229,10 +248,22 @@ class DatabaseController:
         """
         try:
             stats = self.database.get_statistics()
-            return stats.get("efficiency_range", {"min": 0, "max": 0})
+            return {
+                "min": stats.get("min_efficiency", 0),
+                "max": stats.get("max_efficiency", 0),
+                "avg": stats.get("avg_efficiency", 0),
+            }
         except Exception as e:
             print(f"Error getting efficiency range: {e}")
             return {"min": 0, "max": 0}
+
+    def get_size_range(self) -> Dict[str, float]:
+        """Get min/max for height and width (mm)."""
+        try:
+            return self.database.get_size_range()
+        except Exception as e:
+            print(f"Error getting size range: {e}")
+            return {"height_min": 0, "height_max": 0, "width_min": 0, "width_max": 0}
 
     def parse_pan_files(self, directory: str, new_only: bool = False,
                        max_files: int = None, progress_callback=None) -> Dict[str, Any]:
@@ -282,14 +313,13 @@ class DatabaseController:
                         continue
 
                     # Parse the file
-                    parsing_result = self.parser.parse_file(str(pan_file))
+                    parsing_result = self.parser.parse_file(pan_file)
 
                     if parsing_result.success and parsing_result.module:
                         # Insert into database
                         module_id = self.database.insert_module(
                             parsing_result.module,
-                            str(pan_file),
-                            parsing_result.raw_content
+                            update_if_exists=True
                         )
 
                         if module_id:
@@ -300,8 +330,8 @@ class DatabaseController:
                     else:
                         results["failed"] += 1
                         error_msg = f"Failed to parse {pan_file.name}"
-                        if parsing_result.errors:
-                            error_msg += f": {', '.join(parsing_result.errors)}"
+                        if getattr(parsing_result, "error_message", None):
+                            error_msg += f": {parsing_result.error_message}"
                         results["errors"].append(error_msg)
 
                     results["processed"] += 1
