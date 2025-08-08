@@ -6,9 +6,9 @@ handling all database operations and data management.
 """
 
 import sys
-from pathlib import Path
-from typing import Dict, List, Optional, Any
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 # Add the src directory to the Python path
 current_dir = Path(__file__).parent
@@ -16,17 +16,17 @@ src_dir = current_dir.parent.parent / "src"
 sys.path.insert(0, str(src_dir))
 
 from pv_pan_tool.database import PVModuleDatabase
-from pv_pan_tool.models import PVModule, ParsingResult
-from pv_pan_tool.parser import PANParser
+from pv_pan_tool.models import ParsingResult, PVModule
+from pv_pan_tool.parser import PANFileParser
 
 
 class DatabaseController:
     """Controller for database operations."""
-    
+
     def __init__(self, db_path: str = None):
         """
         Initialize the database controller.
-        
+
         Args:
             db_path: Path to the database file. If None, uses default path.
         """
@@ -34,15 +34,17 @@ class DatabaseController:
             # Use default database path relative to the project root
             project_root = Path(__file__).parent.parent.parent
             db_path = project_root / "data" / "database" / "pv_modules.db"
-        
+
         self.db_path = str(db_path)
         self.database = PVModuleDatabase(self.db_path)
-        self.parser = PANParser()
-    
+        # Instantiate the parser correctly; base_directory points to data/pan_files
+        base_dir = Path(__file__).parent.parent.parent / "data" / "pan_files"
+        self.parser = PANFileParser(str(base_dir))
+
     def get_basic_statistics(self) -> Dict[str, Any]:
         """
         Get basic database statistics.
-        
+
         Returns:
             Dictionary containing basic statistics
         """
@@ -55,66 +57,74 @@ class DatabaseController:
                 "total_models": 0,
                 "error": str(e)
             }
-    
+
     def get_detailed_statistics(self) -> Dict[str, Any]:
         """
         Get detailed database statistics.
-        
+
         Returns:
             Dictionary containing detailed statistics
         """
         try:
             stats = self.database.get_statistics()
-            
+
             # Add manufacturer statistics
             manufacturer_stats = self.database.get_manufacturer_statistics()
             stats["manufacturer_statistics"] = manufacturer_stats
-            
+
             # Add cell type statistics
             cell_type_stats = self.database.get_cell_type_statistics()
             stats["cell_type_statistics"] = cell_type_stats
-            
+
             # Add power range distribution
             power_ranges = self.database.get_power_range_distribution()
             stats["power_range_distribution"] = power_ranges
-            
+
             # Add efficiency range distribution
             efficiency_ranges = self.database.get_efficiency_range_distribution()
             stats["efficiency_range_distribution"] = efficiency_ranges
-            
+
             return stats
-            
+
         except Exception as e:
             return {"error": str(e)}
-    
+
     def search_modules(self, criteria: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Search for modules based on criteria.
-        
+
         Args:
             criteria: Search criteria dictionary
-            
+
         Returns:
             List of matching modules
         """
         try:
             return self.database.search_modules(
-                criteria=criteria,
-                sort_by=criteria.get("sort_by", "pmax_stc"),
-                sort_order=criteria.get("sort_order", "desc"),
-                limit=criteria.get("limit", 100)
+                manufacturer=criteria.get("manufacturer"),
+                model=criteria.get("model"),
+                min_power=criteria.get("power_min"),
+                max_power=criteria.get("power_max"),
+                min_efficiency=criteria.get("efficiency_min"),
+                max_efficiency=criteria.get("efficiency_max"),
+                cell_type=criteria.get("cell_type"),
+                min_height=criteria.get("height_min") or criteria.get("min_height"),
+                max_height=criteria.get("height_max") or criteria.get("max_height"),
+                min_width=criteria.get("width_min") or criteria.get("min_width"),
+                max_width=criteria.get("width_max") or criteria.get("max_width"),
+                limit=criteria.get("limit", 100),
             )
         except Exception as e:
             print(f"Error searching modules: {e}")
             return []
-    
+
     def get_module_by_id(self, module_id: int) -> Optional[Dict[str, Any]]:
         """
         Get a specific module by ID.
-        
+
         Args:
             module_id: The module ID
-            
+
         Returns:
             Module data or None if not found
         """
@@ -123,14 +133,14 @@ class DatabaseController:
         except Exception as e:
             print(f"Error getting module {module_id}: {e}")
             return None
-    
+
     def get_modules_by_ids(self, module_ids: List[int]) -> List[Dict[str, Any]]:
         """
         Get multiple modules by their IDs.
-        
+
         Args:
             module_ids: List of module IDs
-            
+
         Returns:
             List of module data
         """
@@ -140,11 +150,11 @@ class DatabaseController:
             if module:
                 modules.append(module)
         return modules
-    
+
     def get_manufacturers(self) -> List[str]:
         """
         Get list of all manufacturers.
-        
+
         Returns:
             List of manufacturer names
         """
@@ -153,14 +163,14 @@ class DatabaseController:
         except Exception as e:
             print(f"Error getting manufacturers: {e}")
             return []
-    
+
     def get_models_by_manufacturer(self, manufacturer: str) -> List[str]:
         """
         Get list of models for a specific manufacturer.
-        
+
         Args:
             manufacturer: Manufacturer name
-            
+
         Returns:
             List of model names
         """
@@ -169,11 +179,11 @@ class DatabaseController:
         except Exception as e:
             print(f"Error getting models for {manufacturer}: {e}")
             return []
-    
+
     def get_cell_types(self) -> List[str]:
         """
         Get list of all cell types.
-        
+
         Returns:
             List of cell types
         """
@@ -182,11 +192,11 @@ class DatabaseController:
         except Exception as e:
             print(f"Error getting cell types: {e}")
             return []
-    
+
     def get_module_types(self) -> List[str]:
         """
         Get list of all module types.
-        
+
         Returns:
             List of module types
         """
@@ -195,11 +205,11 @@ class DatabaseController:
         except Exception as e:
             print(f"Error getting module types: {e}")
             return []
-    
+
     def get_power_range(self) -> Dict[str, float]:
         """
         Get the power range of all modules.
-        
+
         Returns:
             Dictionary with min and max power values
         """
@@ -209,11 +219,11 @@ class DatabaseController:
         except Exception as e:
             print(f"Error getting power range: {e}")
             return {"min": 0, "max": 0}
-    
+
     def get_efficiency_range(self) -> Dict[str, float]:
         """
         Get the efficiency range of all modules.
-        
+
         Returns:
             Dictionary with min and max efficiency values
         """
@@ -223,18 +233,18 @@ class DatabaseController:
         except Exception as e:
             print(f"Error getting efficiency range: {e}")
             return {"min": 0, "max": 0}
-    
-    def parse_pan_files(self, directory: str, new_only: bool = False, 
+
+    def parse_pan_files(self, directory: str, new_only: bool = False,
                        max_files: int = None, progress_callback=None) -> Dict[str, Any]:
         """
         Parse .PAN files from a directory.
-        
+
         Args:
             directory: Directory containing .PAN files
             new_only: Only parse new or modified files
             max_files: Maximum number of files to process
             progress_callback: Callback function for progress updates
-            
+
         Returns:
             Dictionary with parsing results
         """
@@ -242,17 +252,17 @@ class DatabaseController:
             directory_path = Path(directory)
             if not directory_path.exists():
                 return {"error": f"Directory does not exist: {directory}"}
-            
+
             # Find .PAN files
             pan_files = list(directory_path.glob("**/*.PAN"))
             pan_files.extend(list(directory_path.glob("**/*.pan")))
-            
+
             if not pan_files:
                 return {"error": "No .PAN files found in directory"}
-            
+
             if max_files:
                 pan_files = pan_files[:max_files]
-            
+
             results = {
                 "total_files": len(pan_files),
                 "processed": 0,
@@ -260,20 +270,20 @@ class DatabaseController:
                 "failed": 0,
                 "errors": []
             }
-            
+
             for i, pan_file in enumerate(pan_files):
                 try:
                     # Update progress
                     if progress_callback:
                         progress_callback(i, len(pan_files), str(pan_file.name))
-                    
+
                     # Check if file should be skipped (new_only mode)
                     if new_only and self.database.is_file_processed(str(pan_file)):
                         continue
-                    
+
                     # Parse the file
                     parsing_result = self.parser.parse_file(str(pan_file))
-                    
+
                     if parsing_result.success and parsing_result.module:
                         # Insert into database
                         module_id = self.database.insert_module(
@@ -281,7 +291,7 @@ class DatabaseController:
                             str(pan_file),
                             parsing_result.raw_content
                         )
-                        
+
                         if module_id:
                             results["successful"] += 1
                         else:
@@ -293,29 +303,29 @@ class DatabaseController:
                         if parsing_result.errors:
                             error_msg += f": {', '.join(parsing_result.errors)}"
                         results["errors"].append(error_msg)
-                    
+
                     results["processed"] += 1
-                    
+
                 except Exception as e:
                     results["failed"] += 1
                     results["errors"].append(f"Error processing {pan_file.name}: {str(e)}")
-            
+
             # Final progress update
             if progress_callback:
                 progress_callback(len(pan_files), len(pan_files), "Complete")
-            
+
             return results
-            
+
         except Exception as e:
             return {"error": f"Error during parsing: {str(e)}"}
-    
+
     def backup_database(self, backup_path: str) -> bool:
         """
         Create a backup of the database.
-        
+
         Args:
             backup_path: Path for the backup file
-            
+
         Returns:
             True if successful, False otherwise
         """
@@ -326,11 +336,11 @@ class DatabaseController:
         except Exception as e:
             print(f"Error creating backup: {e}")
             return False
-    
+
     def optimize_database(self) -> bool:
         """
         Optimize the database performance.
-        
+
         Returns:
             True if successful, False otherwise
         """
@@ -341,11 +351,11 @@ class DatabaseController:
         except Exception as e:
             print(f"Error optimizing database: {e}")
             return False
-    
+
     def clear_database(self) -> bool:
         """
         Clear all data from the database.
-        
+
         Returns:
             True if successful, False otherwise
         """
@@ -355,22 +365,22 @@ class DatabaseController:
         except Exception as e:
             print(f"Error clearing database: {e}")
             return False
-    
+
     def get_database_info(self) -> Dict[str, Any]:
         """
         Get information about the database file.
-        
+
         Returns:
             Dictionary with database information
         """
         try:
             db_file = Path(self.db_path)
-            
+
             if not db_file.exists():
                 return {"exists": False, "path": self.db_path}
-            
+
             stat = db_file.stat()
-            
+
             return {
                 "exists": True,
                 "path": self.db_path,
@@ -379,14 +389,14 @@ class DatabaseController:
                 "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
                 "created": datetime.fromtimestamp(stat.st_ctime).isoformat()
             }
-            
+
         except Exception as e:
             return {"error": str(e)}
-    
+
     def test_connection(self) -> bool:
         """
         Test the database connection.
-        
+
         Returns:
             True if connection is working, False otherwise
         """
@@ -395,4 +405,3 @@ class DatabaseController:
             return "total_modules" in stats
         except Exception:
             return False
-
