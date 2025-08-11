@@ -699,20 +699,6 @@ class MainWindow(QMainWindow):
             </ul>
 
             <p><b>Built with:</b> Python, PyQt6, SQLite</p>
-            <p><b>Copyright:</b> 2024 PV Tools</p>
-            """
-        )
-
-    def closeEvent(self, event):
-        """Handle application close event."""
-        # Stop status worker
-        if hasattr(self, 'status_worker'):
-            self.status_worker.stop()
-
-        # Accept the close event
-        event.accept()
-
-            <p><b>Copyright:</b> 2024 PV Tools</p>
             """
         )
 
