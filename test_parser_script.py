@@ -96,8 +96,8 @@ def main():
                     print(f"     ⚡ Voc: {module.electrical_params.voc_stc} V")
                 if module.electrical_params.isc_stc:
                     print(f"     ⚡ Isc: {module.electrical_params.isc_stc} A")
-                if module.physical_params.length and module.physical_params.width:
-                    print(f"     📏 Dimensions: {module.physical_params.length} x {module.physical_params.width} mm")
+                if module.physical_params.height and module.physical_params.width:
+                    print(f"     📏 Dimensions: {module.physical_params.height} x {module.physical_params.width} mm")
                 if module.efficiency_stc:
                     print(f"     📈 Efficiency: {module.efficiency_stc:.2f}%")
 
