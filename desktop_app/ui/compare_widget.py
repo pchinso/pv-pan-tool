@@ -47,15 +47,21 @@ except Exception:
 
 
 class CompareWidget(QWidget):
-    """Widget for comparing PV modules side by side."""
+    """Widget for comparing PV modules side by side.
+
+    Optionally accepts an export controller to enable exporting comparison
+    data directly from this widget.
+    """
 
     # Signals
     modules_changed = pyqtSignal(list)  # Emitted when module selection changes
 
-    def __init__(self, db_controller):
+    def __init__(self, db_controller, export_controller=None):
         super().__init__()
 
         self.db_controller = db_controller
+        # Export controller is optional but enables the Export button flow
+        self.export_controller = export_controller
         self.compared_modules = []  # List of module dictionaries
         self.max_modules = 5  # Maximum modules to compare
 
@@ -102,14 +108,16 @@ class CompareWidget(QWidget):
 
         # Title
         title_label = QLabel("Module Comparison")
-        title_label.setStyleSheet("""
+        title_label.setStyleSheet(
+            """
             QLabel {
                 font-size: 18px;
                 font-weight: bold;
                 color: #3daee9;
                 padding: 5px;
             }
-        """)
+            """
+        )
 
         layout.addWidget(title_label)
         layout.addStretch()
@@ -127,6 +135,7 @@ class CompareWidget(QWidget):
 
         self.export_btn = QPushButton("Export Comparison")
         self.export_btn.setToolTip("Export comparison data")
+        # Initially disabled until there are modules and a controller is provided
         self.export_btn.setEnabled(False)
 
         layout.addWidget(max_label)
@@ -341,8 +350,8 @@ class CompareWidget(QWidget):
         self.update_comparison_display()
         self.update_selected_modules_display()
 
-        # Enable export if we have modules
-        self.export_btn.setEnabled(len(self.compared_modules) > 0)
+        # Enable export if we have modules AND an export controller
+        self.export_btn.setEnabled(bool(self.export_controller) and len(self.compared_modules) > 0)
 
         # Emit signal
         self.modules_changed.emit(self.compared_modules)
@@ -353,8 +362,8 @@ class CompareWidget(QWidget):
         self.update_comparison_display()
         self.update_selected_modules_display()
 
-        # Disable export if no modules
-        self.export_btn.setEnabled(len(self.compared_modules) > 0)
+        # Disable export if no modules or no controller
+        self.export_btn.setEnabled(bool(self.export_controller) and len(self.compared_modules) > 0)
 
         # Emit signal
         self.modules_changed.emit(self.compared_modules)
@@ -758,7 +767,7 @@ class CompareWidget(QWidget):
 
             if file_path:
                 # Use export controller
-                if hasattr(self, 'export_controller'):
+                if hasattr(self, 'export_controller') and self.export_controller is not None:
                     comparison_data = {
                         "modules": self.compared_modules,
                         "type": "manual_comparison",
